@@ -962,6 +962,96 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
   )
 }
 
+function ApplyBaseTrainingModal({ phase, onClose, onApplied }) {
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const templates = store.templates
+
+  async function handleApply() {
+    if (!selectedTemplate) return
+    setSaving(true)
+    try {
+      // Copy template plans + exercises + week_configs into this phase
+      const tPlans = store.template_plans.filter(p => p.template_id === selectedTemplate.id)
+      for (const tp of tPlans) {
+        const newPlan = await programsService.createPlan(phase.id, {
+          name: tp.name, dayLabel: tp.day_label, muscleGroups: tp.muscle_groups,
+        })
+        const tExercises = store.template_exercises
+          .filter(e => e.template_plan_id === tp.id)
+          .sort((a, b) => (a.order ?? a.exercise_order ?? 0) - (b.order ?? b.exercise_order ?? 0))
+        for (const te of tExercises) {
+          const newPe = await programsService.addExerciseToPlan(newPlan.id, {
+            exerciseId: te.exercise_id,
+            restSeconds: te.rest_seconds,
+            order: te.order ?? te.exercise_order ?? 1,
+            supersetGroup: te.superset_group || null,
+          })
+          // Copy week configs from template
+          const tWcs = store.template_week_configs.filter(wc => wc.template_exercise_id === te.id)
+          if (tWcs.length > 0) {
+            const configs = tWcs.map(wc => ({
+              week: wc.week, sets: wc.sets, reps_min: wc.reps_min, reps_max: wc.reps_max,
+              drop_sets: wc.drop_sets || 0, suggested_weight_kg: wc.suggested_weight_kg || 0, notes: wc.notes || '',
+            }))
+            await programsService.bulkUpdateWeekConfigs(newPe.id, configs)
+          } else {
+            // Default week configs
+            const totalWeeks = phase.total_weeks || 8
+            const configs = Array.from({ length: totalWeeks }, (_, i) => ({
+              week: i + 1, sets: 3, reps_min: 8, reps_max: 12, drop_sets: 0, suggested_weight_kg: 0, notes: '',
+            }))
+            await programsService.bulkUpdateWeekConfigs(newPe.id, configs)
+          }
+        }
+      }
+      onApplied()
+      onClose()
+    } catch (err) {
+      alert('Erro ao aplicar treino base: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Aplicar Treino Base</h2>
+        <p className="text-xs text-brand-muted">Os treinos e exercícios do modelo selecionado serão copiados para "{phase.name}".</p>
+
+        <div className="max-h-60 overflow-y-auto space-y-1">
+          {templates.length === 0 ? (
+            <p className="text-brand-muted text-sm text-center py-6">Nenhum treino base disponível. Crie um em Bibliotecas → Treinos Base.</p>
+          ) : templates.map(t => {
+            const tPlans = store.template_plans.filter(p => p.template_id === t.id)
+            const isSelected = selectedTemplate?.id === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setSelectedTemplate(t)}
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  isSelected ? 'bg-brand-green/15 border border-brand-green/40' : 'bg-brand-dark hover:bg-brand-secondary'
+                }`}
+              >
+                <p className="text-white font-medium">{t.name}</p>
+                <p className="text-brand-muted text-xs">{t.total_weeks} sem · {tPlans.length} treino{tPlans.length !== 1 ? 's' : ''}</p>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+          <button onClick={handleApply} disabled={saving || !selectedTemplate} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">
+            {saving ? 'Aplicando...' : 'Aplicar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PhaseCard({ phase, onStatusChange, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -969,8 +1059,23 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [showWeekEditor, setShowWeekEditor] = useState(false)
+  const [showApplyBase, setShowApplyBase] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameValue, setNameValue] = useState(phase.name)
 
   const plans = store.training_plans.filter((p) => p.phase_id === phase.id)
+
+  async function handleSaveName() {
+    const trimmed = nameValue.trim()
+    if (!trimmed || trimmed === phase.name) {
+      setNameValue(phase.name)
+      setEditingName(false)
+      return
+    }
+    await programsService.updatePhase(phase.id, { name: trimmed })
+    onRefresh()
+    setEditingName(false)
+  }
 
   async function handleAddPlan({ name, dayLabel }) {
     await programsService.createPlan(phase.id, { name, dayLabel })
@@ -1058,7 +1163,24 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-white">{phase.name}</span>
+              {editingName ? (
+                <input
+                  type="text"
+                  value={nameValue}
+                  onChange={e => setNameValue(e.target.value)}
+                  onBlur={handleSaveName}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setNameValue(phase.name); setEditingName(false) } }}
+                  autoFocus
+                  className="font-semibold text-white bg-brand-dark border border-brand-green rounded-lg px-2 py-0.5 text-sm focus:outline-none max-w-[200px]"
+                />
+              ) : (
+                <>
+                  <span className="font-semibold text-white">{phase.name}</span>
+                  <button onClick={() => setEditingName(true)} className="text-brand-muted hover:text-brand-green transition-colors" title="Renomear">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </>
+              )}
               <StatusBadge status={phase.status} />
             </div>
             <div className="flex flex-wrap gap-4 mt-1.5 text-xs text-brand-muted">
@@ -1131,6 +1253,14 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
                       <span className="text-xs opacity-70">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                       </span> Editar Fases
+                    </button>
+                    <button
+                      onClick={() => { setMenuOpen(false); setShowApplyBase(true) }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
+                    >
+                      <span className="text-xs opacity-70">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+                      </span> Aplicar Treino Base
                     </button>
                     <button
                       onClick={() => { setMenuOpen(false); setShowCopyModal(true) }}
@@ -1216,6 +1346,13 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
             phase.week_phase_labels = JSON.stringify(configs)
             onRefresh()
           }}
+        />
+      )}
+      {showApplyBase && (
+        <ApplyBaseTrainingModal
+          phase={phase}
+          onClose={() => setShowApplyBase(false)}
+          onApplied={onRefresh}
         />
       )}
     </div>
