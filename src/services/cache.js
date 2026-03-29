@@ -54,7 +54,13 @@ export async function loadSupabaseCache(userId, role) {
     const { data: ex } = await sb.from('exercises').select('*').order('id')
 
     const mgList = mg || []
-    const exList = ex || []
+    // Parse muscle_activations jsonb (may come as string from Supabase)
+    const exList = (ex || []).map(e => {
+      if (e.muscle_activations && typeof e.muscle_activations === 'string') {
+        try { e.muscle_activations = JSON.parse(e.muscle_activations) } catch {}
+      }
+      return e
+    })
 
     // Admin login: seed Cardio/Core into Supabase if missing
     if (role === 'admin') {

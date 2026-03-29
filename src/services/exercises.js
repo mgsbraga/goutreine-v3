@@ -36,13 +36,22 @@ export async function createExercise({ name, muscleGroupId, description, activat
     store.exercises.push(ex)
     return ex
   }
+  // Try with muscle_activations first, fallback without if column doesn't exist
   const payload = {
     name, muscle_group_id: finalGroupId, description,
     muscle_activations: finalActivations,
   }
-  const { data, error } = await sb.from('exercises').insert(payload).select().single()
-  if (error) throw error
-  // Parse JSON if Supabase returns string
+  let { data, error } = await sb.from('exercises').insert(payload).select().single()
+  if (error && error.message?.includes('muscle_activations')) {
+    // Column doesn't exist yet — insert without it
+    const { data: d2, error: e2 } = await sb.from('exercises')
+      .insert({ name, muscle_group_id: finalGroupId, description })
+      .select().single()
+    if (e2) throw e2
+    data = { ...d2, muscle_activations: finalActivations }
+  } else if (error) {
+    throw error
+  }
   if (data.muscle_activations && typeof data.muscle_activations === 'string') {
     try { data.muscle_activations = JSON.parse(data.muscle_activations) } catch {}
   }
@@ -70,11 +79,21 @@ export async function updateExercise(id, { name, muscleGroupId, description, act
     name, muscle_group_id: finalGroupId, description,
     muscle_activations: finalActivations,
   }
-  const { data, error } = await sb.from('exercises').update(payload).eq('id', id).select().single()
-  if (error) throw error
+  let { data, error } = await sb.from('exercises').update(payload).eq('id', id).select().single()
+  if (error && error.message?.includes('muscle_activations')) {
+    const { data: d2, error: e2 } = await sb.from('exercises')
+      .update({ name, muscle_group_id: finalGroupId, description })
+      .eq('id', id).select().single()
+    if (e2) throw e2
+    data = { ...d2, muscle_activations: finalActivations }
+  } else if (error) {
+    throw error
+  }
   if (data.muscle_activations && typeof data.muscle_activations === 'string') {
     try { data.muscle_activations = JSON.parse(data.muscle_activations) } catch {}
   }
+  // Ensure activations are in local store even if Supabase didn't persist them
+  if (!data.muscle_activations && finalActivations) data.muscle_activations = finalActivations
   const idx = store.exercises.findIndex((e) => e.id === id)
   if (idx >= 0) store.exercises[idx] = data
   return data
