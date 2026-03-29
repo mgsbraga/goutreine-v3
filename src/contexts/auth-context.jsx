@@ -19,13 +19,21 @@ export function AuthProvider({ children }) {
   const trySync = useCallback(async () => {
     const queue = getOfflineQueue()
     setPendingSync(queue.length)
-    if (queue.length === 0) return
+    if (queue.length === 0) return { synced: 0, failed: 0 }
     const result = await syncOfflineQueue()
-    setPendingSync(getOfflineQueue().length)
+    const remaining = getOfflineQueue().length
+    setPendingSync(remaining)
     if (result.synced > 0) {
-      setSyncMessage(`${result.synced} treino${result.synced > 1 ? 's' : ''} sincronizado${result.synced > 1 ? 's' : ''}`)
-      setTimeout(() => setSyncMessage(null), 4000)
+      const msg = remaining > 0
+        ? `${result.synced} sincronizado${result.synced > 1 ? 's' : ''}, ${remaining} pendente${remaining > 1 ? 's' : ''}`
+        : `${result.synced} treino${result.synced > 1 ? 's' : ''} sincronizado${result.synced > 1 ? 's' : ''}!`
+      setSyncMessage(msg)
+      setTimeout(() => setSyncMessage(null), 5000)
+    } else if (result.failed > 0 && result.synced === 0) {
+      setSyncMessage('Falha ao sincronizar. Tente novamente.')
+      setTimeout(() => setSyncMessage(null), 5000)
     }
+    return result
   }, [])
 
   // Sync when coming back online
@@ -142,6 +150,7 @@ export function AuthProvider({ children }) {
       logout,
       pendingSync,
       syncMessage,
+      trySync,
     }}>
       {children}
     </AuthContext.Provider>
