@@ -561,37 +561,36 @@ export default function ProgressoPage() {
         </div>
 
         {/* Volume by muscle group */}
-        <div className="card-dark rounded-xl p-4 mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-white">Volume por Grupo Muscular</h2>
-            {volumeData.labels.length > 0 && (
-              <button
-                onClick={() => setShowGroupDetail(true)}
-                className="text-xs text-brand-green hover:underline"
-              >
-                Ver detalhes &rsaquo;
-              </button>
+        {!showGroupDetail ? (
+          <div
+            className="card-dark rounded-xl p-4 mb-5 cursor-pointer hover:border hover:border-brand-green transition-colors"
+            onClick={() => volumeData.labels.length > 0 && setShowGroupDetail(true)}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-white">Volume por Grupo Muscular</h2>
+              {volumeData.labels.length > 0 && (
+                <span className="text-xs text-brand-green">
+                  Ver detalhes ›
+                </span>
+              )}
+            </div>
+
+            {volumeData.labels.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">
+                Nenhum volume registrado ainda.
+              </p>
+            ) : (
+              <>
+                <ChartCanvas
+                  id="volume-chart"
+                  buildChart={buildVolumeChart}
+                  deps={[days, volumeData.labels.join(',')]}
+                />
+                <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
+              </>
             )}
           </div>
-
-          {volumeData.labels.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-6">
-              Nenhum volume registrado ainda.
-            </p>
-          ) : (
-            <>
-              <ChartCanvas
-                id="volume-chart"
-                buildChart={buildVolumeChart}
-                deps={[days, volumeData.labels.join(',')]}
-              />
-              <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
-            </>
-          )}
-        </div>
-
-        {/* Group detail drill-down */}
-        {showGroupDetail && (
+        ) : (
           <GroupDetailView
             studentId={user?.id}
             days={days}

@@ -1034,24 +1034,29 @@ function StudentProgressContent({ studentId }) {
           </div>
 
           {/* Volume by muscle group */}
-          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">Volume por Grupo Muscular</h3>
-              {volumeData.labels.length > 0 && (
-                <button onClick={() => setShowGroupDetail(true)} className="text-xs text-brand-green hover:underline">
-                  Ver detalhes &rsaquo;
-                </button>
+          {!showGroupDetail ? (
+            <div
+              className="bg-brand-card border border-brand-secondary rounded-xl p-4 cursor-pointer hover:border-brand-green transition-colors"
+              onClick={() => volumeData.labels.length > 0 && setShowGroupDetail(true)}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-white">Volume por Grupo Muscular</h3>
+                {volumeData.labels.length > 0 && (
+                  <span className="text-xs text-brand-green">Ver detalhes ›</span>
+                )}
+              </div>
+              {volumeData.labels.length === 0 ? (
+                <p className="text-brand-muted text-sm text-center py-6">Nenhum volume registrado no período.</p>
+              ) : (
+                <>
+                  <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
+                  <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
+                </>
               )}
             </div>
-            {volumeData.labels.length === 0 ? (
-              <p className="text-brand-muted text-sm text-center py-6">Nenhum volume registrado no período.</p>
-            ) : (
-              <>
-                <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
-                <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
-              </>
-            )}
-          </div>
+          ) : (
+            <AdminGroupDetailView studentId={studentId} days={days} onBack={() => setShowGroupDetail(false)} />
+          )}
 
           {/* Weekly volume */}
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
@@ -1062,11 +1067,6 @@ function StudentProgressContent({ studentId }) {
               <ChartCanvas id="admin-weekly-volume" buildChart={buildWeeklyVolumeChart} deps={[days, weeklyVolumeData.labels.join(',')]} />
             )}
           </div>
-
-          {/* Group detail drill-down */}
-          {showGroupDetail && (
-            <AdminGroupDetailView studentId={studentId} days={days} onBack={() => setShowGroupDetail(false)} />
-          )}
         </>
       )}
     </div>
