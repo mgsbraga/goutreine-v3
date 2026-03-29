@@ -1798,22 +1798,102 @@ function AdminGroupDetailView({ studentId, days, onBack }) {
   )
 }
 
+function ExpandableChartModal({ isOpen, title, onClose, children }) {
+  const overlayRef = useRef(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    function handleKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-10"
+      style={{ background: 'rgba(0,0,0,0.85)', cursor: 'pointer' }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
+    >
+      <div
+        className="bg-brand-card border border-brand-secondary rounded-2xl p-8 w-full max-w-[1000px] max-h-[90vh] overflow-y-auto relative"
+        style={{ cursor: 'default' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-5 text-brand-muted hover:text-white text-xl px-2 py-1 rounded-lg hover:bg-brand-secondary"
+        >
+          &times;
+        </button>
+        <div className="text-lg font-semibold mb-5">{title}</div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function StudentProgressContent({ studentId }) {
   const [days, setDays] = useState(30)
   const [selectedExercise, setSelectedExercise] = useState(null)
-  const [showGroupDetail, setShowGroupDetail] = useState(false)
+  const [expandedChart, setExpandedChart] = useState(null) // 'line' | 'balance' | 'stacked' | 'freq' | 'prs' | null
 
   const since = new Date()
   since.setDate(since.getDate() - days)
 
   // ── Data ──
 
-  // Personal records
-  const studentSessionIds = store.workout_sessions
-    .filter(s => s.student_id === studentId)
-    .map(s => s.id)
-  const studentLogs = store.session_logs.filter(l => studentSessionIds.includes(l.session_id))
+  // Sessions in current and previous periods
+  const currentSessions = store.workout_sessions
+    .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+  const prevPeriodEnd = new Date()
+  prevPeriodEnd.setDate(prevPeriodEnd.getDate() - days)
+  const prevPeriodStart = new Date()
+  prevPeriodStart.setDate(prevPeriodStart.getDate() - days * 2)
+  const prevSessions = store.workout_sessions
+    .filter(s => s.student_id === studentId &&
+      new Date((s.date || s.session_date) + 'T00:00:00') >= prevPeriodStart &&
+      new Date((s.date || s.session_date) + 'T00:00:00') < prevPeriodEnd)
 
+  // All student sessions (for PRs and noData check)
+  const allStudentSessionIds = store.workout_sessions
+    .filter(s => s.student_id === studentId).map(s => s.id)
+  const studentLogs = store.session_logs.filter(l => allStudentSessionIds.includes(l.session_id))
+
+  // KPIs
+  const currentCount = currentSessions.length
+  const prevCount = prevSessions.length
+  const countChange = currentCount - prevCount
+
+  function getVolumeForSessions(sessions) {
+    const ids = sessions.map(s => s.id)
+    const logs = store.session_logs.filter(l => ids.includes(l.session_id))
+    return logs.reduce((sum, l) => sum + (l.weight_kg || 0) * (l.reps_done || 0), 0)
+  }
+
+  const currentVolume = getVolumeForSessions(currentSessions)
+  const prevVolume = getVolumeForSessions(prevSessions)
+  const volumeChangePct = prevVolume > 0 ? Math.round(((currentVolume - prevVolume) / prevVolume) * 100) : 0
+  const volumePerWorkout = currentCount > 0 ? Math.round(currentVolume / currentCount) : 0
+  const prevVolumePerWorkout = prevCount > 0 ? Math.round(prevVolume / prevCount) : 0
+  const vptChangePct = prevVolumePerWorkout > 0 ? Math.round(((volumePerWorkout - prevVolumePerWorkout) / prevVolumePerWorkout) * 100) : 0
+
+  // Adherence
+  const student = store.users.find(u => u.id === studentId)
+  const weeklyGoal = student?.weekly_goal
+  const weeksInPeriod = Math.max(1, days / 7)
+  const adherence = weeklyGoal && weeklyGoal > 0
+    ? Math.min(100, Math.round((currentCount / (weeklyGoal * weeksInPeriod)) * 100))
+    : null
+
+  function formatVol(v) {
+    if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
+    return Math.round(v).toString()
+  }
+
+  // Personal records
   const prs = (() => {
     const prMap = {}
     for (const log of studentLogs) {
@@ -1827,6 +1907,17 @@ function StudentProgressContent({ studentId }) {
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 6)
   })()
+
+  const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}', '4', '5', '6']
+
+  function getExerciseGroupName(exerciseId) {
+    const ex = store.exercises.find(e => e.id === exerciseId)
+    if (!ex) return ''
+    const activations = getExerciseActivations(ex)
+    if (activations.length === 0) return ''
+    const primary = activations.sort((a, b) => b.pct - a.pct)[0]
+    return getMuscleGroupName(primary.group_id)
+  }
 
   // Progression data for selected exercise
   const defaultExercise = selectedExercise ?? (
@@ -1850,11 +1941,9 @@ function StudentProgressContent({ studentId }) {
     }, [])
   })()
 
-  // Volume by muscle group
+  // Volume by muscle group (for CSS bars)
   const volumeData = (() => {
-    const filteredSessionIds = store.workout_sessions
-      .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
-      .map(s => s.id)
+    const filteredSessionIds = currentSessions.map(s => s.id)
     const logs = store.session_logs.filter(l => filteredSessionIds.includes(l.session_id))
     const volumeMap = {}
     for (const log of logs) {
@@ -1873,8 +1962,48 @@ function StudentProgressContent({ studentId }) {
       colors: entries.map(([gid]) => MUSCLE_COLOR_MAP[parseInt(gid)] || '#A4E44B'),
     }
   })()
+  const maxGroupVolume = volumeData.volumes.length > 0 ? Math.max(...volumeData.volumes) : 1
 
-  // Weekly volume
+  // Weekly volume by group (stacked bar)
+  const weeklyByGroup = (() => {
+    const sessions = store.workout_sessions
+      .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+      .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
+    if (sessions.length === 0) return { labels: [], datasets: [] }
+    const weekMap = {}
+    const groupTotals = {}
+    for (const session of sessions) {
+      const d = new Date((session.date || session.session_date) + 'T00:00:00')
+      const year = d.getFullYear()
+      const startOfYear = new Date(year, 0, 1)
+      const weekNum = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+      const key = `S${weekNum}`
+      if (!weekMap[key]) weekMap[key] = {}
+      const logs = store.session_logs.filter(l => l.session_id === session.id)
+      for (const log of logs) {
+        const ex = store.exercises.find(e => e.id === log.exercise_id)
+        if (!ex) continue
+        const vol = (log.weight_kg || 0) * (log.reps_done || 0)
+        const activations = getExerciseActivations(ex)
+        for (const a of activations) {
+          const proportionalVol = vol * (a.pct / 100)
+          weekMap[key][a.group_id] = (weekMap[key][a.group_id] || 0) + proportionalVol
+          groupTotals[a.group_id] = (groupTotals[a.group_id] || 0) + proportionalVol
+        }
+      }
+    }
+    const weekLabels = Object.keys(weekMap)
+    const topGroups = Object.entries(groupTotals).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([gid]) => parseInt(gid))
+    const datasets = topGroups.map(gid => ({
+      label: getMuscleGroupName(gid),
+      data: weekLabels.map(wk => Math.round(weekMap[wk][gid] || 0)),
+      backgroundColor: (MUSCLE_COLOR_MAP[gid] || '#A4E44B') + '85',
+      borderRadius: 3,
+    }))
+    return { labels: weekLabels, datasets }
+  })()
+
+  // Weekly volume + session counts (for combo chart)
   const weeklyVolumeData = (() => {
     const sessions = store.workout_sessions
       .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
@@ -1910,107 +2039,170 @@ function StudentProgressContent({ studentId }) {
 
   // ── Chart builders ──
 
-  function buildProgressionChart(ctx) {
+  function buildProgressionChart(ctx, large) {
+    const fontSize = large ? 13 : 11
     return new Chart(ctx, {
       type: 'line',
       data: {
         labels: progressionData.map(d => d.date),
         datasets: [{
-          label: getExerciseName(defaultExercise),
           data: progressionData.map(d => d.weight),
           borderColor: '#A4E44B',
-          backgroundColor: 'rgba(164,228,75,0.1)',
-          pointBackgroundColor: '#A4E44B',
-          tension: 0.3,
+          backgroundColor: '#A4E44B15',
           fill: true,
+          tension: 0.3,
+          pointBackgroundColor: '#A4E44B',
+          pointRadius: large ? 6 : 5,
+          pointHoverRadius: large ? 9 : 7,
         }],
       },
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: CHART_TEXT } } },
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw + ' kg' } } },
         scales: {
-          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
-          y: { ticks: { color: CHART_TEXT, callback: v => `${v} kg` }, grid: { color: CHART_GRID } },
+          x: { ticks: { color: CHART_TEXT, font: { size: fontSize } }, grid: { display: false } },
+          y: { ticks: { color: CHART_TEXT, font: { size: fontSize }, callback: v => v + 'kg' }, grid: { color: CHART_GRID }, beginAtZero: false },
         },
       },
     })
   }
 
-  function buildVolumeChart(ctx) {
+  function buildStackedVolumeChart(ctx, large) {
+    const fontSize = large ? 13 : 11
     return new Chart(ctx, {
       type: 'bar',
-      data: {
-        labels: volumeData.labels,
-        datasets: [{
-          label: 'Volume total (kg×reps)',
-          data: volumeData.volumes,
-          backgroundColor: volumeData.colors,
-          borderRadius: 4,
-        }],
-      },
+      data: { labels: weeklyByGroup.labels, datasets: weeklyByGroup.datasets },
       options: {
-        indexAxis: 'y',
         responsive: true,
-        plugins: { legend: { display: false } },
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: CHART_TEXT, boxWidth: large ? 12 : 10, font: { size: fontSize }, padding: large ? 10 : 8 } },
+        },
         scales: {
-          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID }, beginAtZero: true },
-          y: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
+          x: { stacked: true, ticks: { color: CHART_TEXT, font: { size: fontSize } }, grid: { display: false } },
+          y: { stacked: true, ticks: { color: CHART_TEXT, font: { size: fontSize }, callback: v => `${(v / 1000).toFixed(0)}k` }, grid: { color: CHART_GRID }, beginAtZero: true },
         },
       },
     })
   }
 
-  function buildWeeklyVolumeChart(ctx) {
+  function buildFrequencyChart(ctx, large) {
+    const fontSize = large ? 13 : 11
     return new Chart(ctx, {
       type: 'bar',
       data: {
         labels: weeklyVolumeData.labels,
         datasets: [
-          {
-            label: 'Volume (kg×reps)',
-            data: weeklyVolumeData.volumes,
-            backgroundColor: '#A4E44B',
-            borderRadius: 4,
-            yAxisID: 'y',
-          },
-          {
-            label: 'Sessões',
-            data: weeklyVolumeData.sessionCounts,
-            type: 'line',
-            borderColor: '#64c8ff',
-            backgroundColor: 'rgba(100,200,255,0.1)',
-            pointBackgroundColor: '#64c8ff',
-            tension: 0.3,
-            yAxisID: 'y1',
-          },
+          { label: 'Volume (kg)', data: weeklyVolumeData.volumes, backgroundColor: '#A4E44B50', borderColor: '#A4E44B', borderWidth: 1, borderRadius: 4, yAxisID: 'y' },
+          { label: 'Sess\u00f5es', data: weeklyVolumeData.sessionCounts, type: 'line', borderColor: '#64c8ff', backgroundColor: '#64c8ff20', pointBackgroundColor: '#64c8ff', pointRadius: large ? 6 : 5, tension: 0.3, yAxisID: 'y1' },
         ],
       },
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: CHART_TEXT } } },
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: CHART_TEXT, boxWidth: large ? 12 : 10, font: { size: fontSize } } } },
         scales: {
-          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
-          y: { position: 'left', ticks: { color: '#A4E44B' }, grid: { color: CHART_GRID }, beginAtZero: true },
-          y1: { position: 'right', ticks: { color: '#64c8ff', stepSize: 1 }, grid: { drawOnChartArea: false }, beginAtZero: true },
+          x: { ticks: { color: CHART_TEXT, font: { size: fontSize } }, grid: { display: false } },
+          y: { position: 'left', ticks: { color: CHART_TEXT, font: { size: fontSize }, callback: v => `${(v / 1000).toFixed(0)}k` }, grid: { color: CHART_GRID }, beginAtZero: true },
+          y1: { position: 'right', ticks: { color: '#64c8ff', font: { size: fontSize }, stepSize: 1 }, grid: { display: false }, beginAtZero: true, max: 6 },
         },
       },
     })
   }
 
-  const noData = studentSessionIds.length === 0
+  const noData = allStudentSessionIds.length === 0
+
+  // Expandable chart card helper
+  function ExpandableCard({ chartKey, title, children }) {
+    return (
+      <div
+        className="bg-brand-card border border-brand-secondary rounded-xl p-5 cursor-pointer hover:border-[#A4E44B40] transition-colors relative"
+        onClick={() => setExpandedChart(chartKey)}
+      >
+        <span className="absolute top-3 right-3.5 text-sm text-brand-secondary hover:text-brand-green">{'\u26f6'}</span>
+        <h3 className="text-[15px] font-semibold text-white mb-4">{title}</h3>
+        {children}
+      </div>
+    )
+  }
+
+  // Render CSS balance bars (for inline or modal)
+  function BalanceBars({ large }) {
+    if (volumeData.labels.length === 0) return <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+    const trackH = large ? 'h-8' : 'h-6'
+    const nameSize = large ? 'text-[15px]' : 'text-[13px]'
+    const volSize = large ? 'text-[14px]' : 'text-xs'
+    return (
+      <div className="space-y-2.5">
+        {volumeData.labels.map((label, i) => {
+          const pct = (volumeData.volumes[i] / maxGroupVolume) * 100
+          const showInside = pct > 25
+          return (
+            <div key={label}>
+              <div className="flex justify-between mb-1">
+                <span className={`${nameSize} text-gray-300`}>{label}</span>
+                <span className={`${volSize} text-brand-muted`}>{formatVol(volumeData.volumes[i])}k kg</span>
+              </div>
+              <div className={`${trackH} bg-brand-dark rounded-md overflow-hidden`}>
+                <div
+                  className="h-full rounded-md flex items-center justify-end pr-2"
+                  style={{ width: `${pct}%`, backgroundColor: volumeData.colors[i], minWidth: '4px' }}
+                >
+                  {showInside && (
+                    <span className="text-[10px] font-bold text-brand-dark">{formatVol(volumeData.volumes[i])}k</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // PRs list (for inline or modal)
+  function PRsList({ large }) {
+    if (prs.length === 0) return <p className="text-brand-muted text-sm text-center py-6">Nenhum registro.</p>
+    const left = prs.slice(0, 3)
+    const right = prs.slice(3, 6)
+    const nameSize = large ? 'text-sm' : 'text-sm'
+    const kgSize = large ? 'text-lg' : 'text-lg'
+    const medalSize = large ? 'text-xl' : 'text-xl'
+
+    function PRItem({ pr, idx }) {
+      return (
+        <div className="flex items-center gap-3.5 py-3" style={{ borderBottom: '1px solid #1a1a1a' }}>
+          <span className={`${medalSize} w-8 text-center`}>{medals[idx]}</span>
+          <div className="flex-1 min-w-0">
+            <div className={`${nameSize} font-medium truncate`}>{getExerciseName(pr.exerciseId)}</div>
+            <div className="text-[11px] text-brand-muted">{getExerciseGroupName(pr.exerciseId)}</div>
+          </div>
+          <span className={`${kgSize} font-bold text-brand-green`}>{pr.weight}kg</span>
+        </div>
+      )
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+        <div>{left.map((pr, i) => <PRItem key={pr.exerciseId} pr={pr} idx={i} />)}</div>
+        {right.length > 0 && <div>{right.map((pr, i) => <PRItem key={pr.exerciseId} pr={pr} idx={i + 3} />)}</div>}
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-4">
-      {/* Time filter */}
+    <div className="space-y-5">
+      {/* Period chips */}
       <div className="flex gap-2">
-        {[30, 60, 90].map(d => (
+        {[7, 30, 90].map(d => (
           <button
             key={d}
             onClick={() => setDays(d)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${
               days === d
-                ? 'bg-brand-green text-brand-dark'
-                : 'bg-brand-secondary text-brand-muted hover:text-white'
+                ? 'bg-brand-green text-brand-dark border-brand-green font-semibold'
+                : 'border-brand-secondary text-brand-muted'
             }`}
           >
             {d} dias
@@ -2024,78 +2216,159 @@ function StudentProgressContent({ studentId }) {
         </div>
       ) : (
         <>
-          {/* Personal records */}
-          {prs.length > 0 && (
-            <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-white mb-3">Recordes Pessoais</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {prs.map(({ exerciseId, weight }) => (
-                  <div key={exerciseId} className="bg-brand-secondary rounded-lg px-3 py-2">
-                    <p className="text-xs text-brand-muted truncate">{getExerciseName(exerciseId)}</p>
-                    <p className="text-lg font-bold text-brand-green">{weight} kg</p>
-                  </div>
-                ))}
+          {/* 4 KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
+              <div className="text-[30px] font-bold" style={{ color: '#A4E44B' }}>{currentCount}</div>
+              <div className="text-xs text-brand-muted mt-1">Treinos no per\u00edodo</div>
+              <div className={`text-[10px] font-semibold mt-1 ${countChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
+                {countChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(countChange)} vs anterior
               </div>
             </div>
-          )}
+            <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
+              <div className="text-[30px] font-bold" style={{ color: '#64c8ff' }}>{formatVol(currentVolume)}</div>
+              <div className="text-xs text-brand-muted mt-1">Volume total (kg)</div>
+              <div className={`text-[10px] font-semibold mt-1 ${volumeChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
+                {volumeChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(volumeChangePct)}%
+              </div>
+            </div>
+            <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
+              <div className="text-[30px] font-bold" style={{ color: '#ffc83c' }}>{formatVol(volumePerWorkout)}</div>
+              <div className="text-xs text-brand-muted mt-1">Volume por treino</div>
+              <div className={`text-[10px] font-semibold mt-1 ${vptChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
+                {vptChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(vptChangePct)}%
+              </div>
+            </div>
+            <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
+              <div className="text-[30px] font-bold" style={{ color: '#ff9664' }}>
+                {adherence !== null ? `${adherence}%` : '\u2014'}
+              </div>
+              <div className="text-xs text-brand-muted mt-1">Ader\u00eancia</div>
+              <div className="text-[10px] font-semibold mt-1" style={{ color: '#ff9664' }}>
+                {weeklyGoal ? `Meta: ${weeklyGoal}\u00d7/sem` : ''}
+              </div>
+            </div>
+          </div>
 
-          {/* Progression chart */}
-          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Progressão de Carga</h3>
-            <select
-              value={defaultExercise ?? ''}
-              onChange={e => setSelectedExercise(parseInt(e.target.value))}
-              className="w-full bg-brand-secondary text-white text-sm rounded-lg px-3 py-2 mb-4 border border-brand-secondary"
-            >
-              {exercisesByGroup.map(({ group, exercises }) => (
-                <optgroup key={group.id} label={group.name}>
-                  {exercises.map(ex => (
-                    <option key={ex.id} value={ex.id}>{ex.name}</option>
+          {/* Row 1: Progressao de Carga + Equilibrio Muscular */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <ExpandableCard chartKey="line" title="Progress\u00e3o de Carga">
+              <div className="flex justify-end mb-3">
+                <select
+                  value={defaultExercise ?? ''}
+                  onChange={e => { e.stopPropagation(); setSelectedExercise(parseInt(e.target.value)) }}
+                  onClick={e => e.stopPropagation()}
+                  className="bg-brand-dark border border-brand-secondary rounded-lg px-3 py-1.5 text-xs text-white"
+                >
+                  {exercisesByGroup.map(({ group, exercises }) => (
+                    <optgroup key={group.id} label={group.name}>
+                      {exercises.map(ex => (
+                        <option key={ex.id} value={ex.id}>{ex.name}</option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-            {progressionData.length === 0 ? (
-              <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exercício no período.</p>
-            ) : (
-              <ChartCanvas id="admin-progression" buildChart={buildProgressionChart} deps={[defaultExercise, days, progressionData.length]} />
-            )}
-          </div>
-
-          {/* Volume by muscle group */}
-          {!showGroupDetail ? (
-            <div
-              className="bg-brand-card border border-brand-secondary rounded-xl p-4 cursor-pointer hover:border-brand-green transition-colors"
-              onClick={() => volumeData.labels.length > 0 && setShowGroupDetail(true)}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-white">Volume por Grupo Muscular</h3>
-                {volumeData.labels.length > 0 && (
-                  <span className="text-xs text-brand-green">Ver detalhes ›</span>
-                )}
+                </select>
               </div>
-              {volumeData.labels.length === 0 ? (
-                <p className="text-brand-muted text-sm text-center py-6">Nenhum volume registrado no período.</p>
+              {progressionData.length === 0 ? (
+                <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exerc\u00edcio no per\u00edodo.</p>
               ) : (
-                <>
-                  <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
-                  <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
-                </>
+                <div style={{ height: '280px' }}>
+                  <ChartCanvas id="admin-progression" buildChart={(ctx) => buildProgressionChart(ctx, false)} deps={[defaultExercise, days, progressionData.length]} />
+                </div>
               )}
-            </div>
-          ) : (
-            <AdminGroupDetailView studentId={studentId} days={days} onBack={() => setShowGroupDetail(false)} />
-          )}
+            </ExpandableCard>
 
-          {/* Weekly volume */}
-          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Volume Semanal</h3>
-            {weeklyVolumeData.labels.length === 0 ? (
-              <p className="text-brand-muted text-sm text-center py-6">Nenhum dado de volume no período.</p>
-            ) : (
-              <ChartCanvas id="admin-weekly-volume" buildChart={buildWeeklyVolumeChart} deps={[days, weeklyVolumeData.labels.join(',')]} />
-            )}
+            <ExpandableCard chartKey="balance" title="Equil\u00edbrio Muscular">
+              <BalanceBars large={false} />
+            </ExpandableCard>
           </div>
+
+          {/* Row 2: Volume Semanal por Grupamento + Frequencia e Volume */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <ExpandableCard chartKey="stacked" title="Volume Semanal por Grupamento">
+              {weeklyByGroup.labels.length === 0 ? (
+                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+              ) : (
+                <div style={{ height: '280px' }}>
+                  <ChartCanvas id="admin-stacked-volume" buildChart={(ctx) => buildStackedVolumeChart(ctx, false)} deps={[days, weeklyByGroup.labels.join(',')]} />
+                </div>
+              )}
+            </ExpandableCard>
+
+            <ExpandableCard chartKey="freq" title="Frequ\u00eancia e Volume Semanal">
+              {weeklyVolumeData.labels.length === 0 ? (
+                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+              ) : (
+                <div style={{ height: '280px' }}>
+                  <ChartCanvas id="admin-frequency" buildChart={(ctx) => buildFrequencyChart(ctx, false)} deps={[days, weeklyVolumeData.labels.join(',')]} />
+                </div>
+              )}
+            </ExpandableCard>
+          </div>
+
+          {/* Row 3: PRs full width */}
+          <ExpandableCard chartKey="prs" title={'\u{1F3C6} Personal Records'}>
+            <PRsList large={false} />
+          </ExpandableCard>
+
+          {/* Fullscreen modal for expanded charts */}
+          <ExpandableChartModal
+            isOpen={expandedChart === 'line'}
+            title="Progress\u00e3o de Carga"
+            onClose={() => setExpandedChart(null)}
+          >
+            {progressionData.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Sem dados.</p>
+            ) : (
+              <div style={{ height: '500px' }}>
+                <ChartCanvas id="admin-progression-modal" buildChart={(ctx) => buildProgressionChart(ctx, true)} deps={[defaultExercise, days, progressionData.length, 'modal']} />
+              </div>
+            )}
+          </ExpandableChartModal>
+
+          <ExpandableChartModal
+            isOpen={expandedChart === 'balance'}
+            title="Equil\u00edbrio Muscular"
+            onClose={() => setExpandedChart(null)}
+          >
+            <BalanceBars large={true} />
+          </ExpandableChartModal>
+
+          <ExpandableChartModal
+            isOpen={expandedChart === 'stacked'}
+            title="Volume Semanal por Grupamento"
+            onClose={() => setExpandedChart(null)}
+          >
+            {weeklyByGroup.labels.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Sem dados.</p>
+            ) : (
+              <div style={{ height: '500px' }}>
+                <ChartCanvas id="admin-stacked-modal" buildChart={(ctx) => buildStackedVolumeChart(ctx, true)} deps={[days, weeklyByGroup.labels.join(','), 'modal']} />
+              </div>
+            )}
+          </ExpandableChartModal>
+
+          <ExpandableChartModal
+            isOpen={expandedChart === 'freq'}
+            title="Frequ\u00eancia e Volume Semanal"
+            onClose={() => setExpandedChart(null)}
+          >
+            {weeklyVolumeData.labels.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Sem dados.</p>
+            ) : (
+              <div style={{ height: '500px' }}>
+                <ChartCanvas id="admin-freq-modal" buildChart={(ctx) => buildFrequencyChart(ctx, true)} deps={[days, weeklyVolumeData.labels.join(','), 'modal']} />
+              </div>
+            )}
+          </ExpandableChartModal>
+
+          <ExpandableChartModal
+            isOpen={expandedChart === 'prs'}
+            title={'\u{1F3C6} Personal Records'}
+            onClose={() => setExpandedChart(null)}
+          >
+            <PRsList large={true} />
+          </ExpandableChartModal>
         </>
       )}
     </div>
