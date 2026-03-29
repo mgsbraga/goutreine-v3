@@ -42,6 +42,19 @@ export async function deleteTemplate(id) {
     store.templates = store.templates.filter((t) => t.id !== id)
     return true
   }
+  // Cascade: delete week_configs → exercises → plans → template
+  const plans = store.template_plans.filter(p => p.template_id === id)
+  for (const plan of plans) {
+    const exercises = store.template_exercises.filter(te => te.template_plan_id === plan.id)
+    for (const te of exercises) {
+      await sb.from('template_week_configs').delete().eq('template_exercise_id', te.id)
+      store.template_week_configs = store.template_week_configs.filter(wc => wc.template_exercise_id !== te.id)
+    }
+    await sb.from('template_exercises').delete().eq('template_plan_id', plan.id)
+    store.template_exercises = store.template_exercises.filter(te => te.template_plan_id !== plan.id)
+  }
+  await sb.from('template_plans').delete().eq('template_id', id)
+  store.template_plans = store.template_plans.filter(p => p.template_id !== id)
   const { error } = await sb.from('templates').delete().eq('id', id)
   if (error) throw error
   store.templates = store.templates.filter((t) => t.id !== id)
@@ -76,6 +89,14 @@ export async function deleteTemplatePlan(planId) {
     store.template_plans = store.template_plans.filter((p) => p.id !== planId)
     return true
   }
+  // Cascade: delete week_configs → exercises → plan
+  const exercises = store.template_exercises.filter(te => te.template_plan_id === planId)
+  for (const te of exercises) {
+    await sb.from('template_week_configs').delete().eq('template_exercise_id', te.id)
+    store.template_week_configs = store.template_week_configs.filter(wc => wc.template_exercise_id !== te.id)
+  }
+  await sb.from('template_exercises').delete().eq('template_plan_id', planId)
+  store.template_exercises = store.template_exercises.filter(te => te.template_plan_id !== planId)
   const { error } = await sb.from('template_plans').delete().eq('id', planId)
   if (error) throw error
   store.template_plans = store.template_plans.filter((p) => p.id !== planId)
