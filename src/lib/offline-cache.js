@@ -49,3 +49,41 @@ export function clearOfflineAuth() {
     localStorage.removeItem(OFFLINE_AUTH_KEY)
   } catch (e) { /* silent */ }
 }
+
+// ─── Offline Write Queue ────────────────────────────────────────────────────
+
+const OFFLINE_QUEUE_KEY = 'goutreine_offline_queue'
+
+export function queueOfflineWrite(operation) {
+  try {
+    const queue = getOfflineQueue()
+    queue.push({ ...operation, createdAt: new Date().toISOString() })
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+    console.log('[Offline] Operação enfileirada:', operation.type)
+  } catch (e) {
+    console.warn('[Offline] Erro ao enfileirar:', e)
+  }
+}
+
+export function getOfflineQueue() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch (e) {
+    return []
+  }
+}
+
+export function saveOfflineQueue(queue) {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
+  } catch (e) {
+    console.warn('[Offline] Erro ao salvar fila:', e)
+  }
+}
+
+export function clearOfflineQueue() {
+  try {
+    localStorage.removeItem(OFFLINE_QUEUE_KEY)
+  } catch (e) { /* silent */ }
+}

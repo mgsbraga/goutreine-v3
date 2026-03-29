@@ -3,7 +3,8 @@ import { sb } from '../lib/supabase'
 import { isConfigured } from '../lib/supabase'
 import * as authService from '../services/auth'
 import { loadSupabaseCache } from '../services/cache'
-import { saveOfflineAuth, clearOfflineAuth } from '../lib/offline-cache'
+import { saveOfflineAuth, clearOfflineAuth, getOfflineQueue } from '../lib/offline-cache'
+import { syncOfflineQueue } from '../services/workouts'
 
 const AuthContext = createContext(null)
 
@@ -11,7 +12,31 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
+  const [pendingSync, setPendingSync] = useState(() => getOfflineQueue().length)
+  const [syncMessage, setSyncMessage] = useState(null)
   const userRef = useRef(null)
+
+  const trySync = useCallback(async () => {
+    const queue = getOfflineQueue()
+    setPendingSync(queue.length)
+    if (queue.length === 0) return
+    const result = await syncOfflineQueue()
+    setPendingSync(getOfflineQueue().length)
+    if (result.synced > 0) {
+      setSyncMessage(`${result.synced} treino${result.synced > 1 ? 's' : ''} sincronizado${result.synced > 1 ? 's' : ''}`)
+      setTimeout(() => setSyncMessage(null), 4000)
+    }
+  }, [])
+
+  // Sync when coming back online
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[Sync] Conexão restaurada, sincronizando...')
+      trySync()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [trySync])
 
   const restoreSession = useCallback(async (sessionUser) => {
     if (userRef.current) return
@@ -33,11 +58,14 @@ export function AuthProvider({ children }) {
         new Promise((resolve) => setTimeout(resolve, 10000)),
       ])
       setDataLoading(false)
+
+      // Sync any pending offline writes after data loads
+      trySync()
     } catch (e) {
       console.error('[Auth] Erro ao restaurar sessao:', e)
       setDataLoading(false)
     }
-  }, [])
+  }, [trySync])
 
   useEffect(() => {
     if (!sb) { setAuthChecked(true); return }
@@ -112,6 +140,8 @@ export function AuthProvider({ children }) {
       dataLoading,
       login,
       logout,
+      pendingSync,
+      syncMessage,
     }}>
       {children}
     </AuthContext.Provider>

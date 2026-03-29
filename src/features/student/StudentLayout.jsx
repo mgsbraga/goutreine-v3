@@ -21,7 +21,7 @@ const navItems = [
 const isActive = (route) => window.location.hash.includes(`#${route}`)
 
 export default function StudentLayout({ children }) {
-  const { user, logout } = useAuth()
+  const { user, logout, pendingSync, syncMessage } = useAuth()
 
   async function handleLogout() {
     await logout()
@@ -68,6 +68,23 @@ export default function StudentLayout({ children }) {
           </button>
         </div>
       </header>
+
+      {/* Sync toast */}
+      {syncMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-brand-green text-brand-dark px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">
+          {syncMessage}
+        </div>
+      )}
+
+      {/* Pending sync banner */}
+      {pendingSync > 0 && (
+        <div className="bg-yellow-500 bg-opacity-15 border-b border-yellow-500 border-opacity-30 px-4 py-2 flex items-center justify-center gap-2 text-xs text-yellow-400">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <span>{pendingSync} treino{pendingSync > 1 ? 's' : ''} pendente{pendingSync > 1 ? 's' : ''} de sincronização</span>
+        </div>
+      )}
 
       {/* Page content */}
       <main className="flex-1 overflow-y-auto">
