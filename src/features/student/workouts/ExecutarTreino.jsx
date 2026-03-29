@@ -605,7 +605,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                   </p>
                   <div className="flex items-center gap-2">
                     {isInSuperset && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-yellow-400 bg-opacity-20 text-yellow-400 font-bold">
+                      <span className="text-xs px-2.5 py-1 rounded-md bg-yellow-400/20 text-yellow-300 font-bold border border-yellow-400/30">
                         {supersetLabel}
                       </span>
                     )}
