@@ -27,12 +27,25 @@ export async function createSession(studentId, planId, durationMinutes, notes) {
     try {
       const { data, error } = await sb.from('workout_sessions')
         .insert(sessionPayload).select().single()
-      if (error) throw error
+      if (error) {
+        // RLS or permission errors should NOT fall through to offline queue
+        const isRLS = error.code === '42501' || error.message?.includes('policy') || error.message?.includes('permission')
+        const isAuthError = error.code === 'PGRST301' || error.message?.includes('JWT')
+        if (isRLS || isAuthError) {
+          console.error('[createSession] Erro de permissão:', error.message)
+          throw new Error('Sem permissão para salvar treino. Tente fazer logout e login novamente.')
+        }
+        throw error
+      }
       const cached = { ...data, date: data.session_date || data.date }
       store.workout_sessions.unshift(cached)
       return cached
     } catch (err) {
-      console.warn('[Offline] createSession falhou, enfileirando:', err.message)
+      // Only fall through to offline if it's a network error
+      if (err.message?.includes('permissão') || err.message?.includes('permission') || err.message?.includes('policy')) {
+        throw err // Propagate to UI
+      }
+      console.warn('[Offline] createSession falhou (rede), enfileirando:', err.message)
       // Fall through to offline queue
     }
   }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { navigate } from '../../../app/router'
-import { sb } from '../../../lib/supabase'
+import { sb, createIsolatedClient } from '../../../lib/supabase'
 import { store } from '../../../shared/constants/store'
 import { getActivePhase } from '../../../shared/utils/phase-helpers'
 import AdminLayout from '../AdminLayout'
@@ -97,8 +97,12 @@ function AddStudentModal({ onClose, onCreated }) {
     setSaving(true)
     try {
       if (sb) {
-        // 1. Create auth user via Supabase signUp (anon key)
-        const { data: authData, error: authError } = await sb.auth.signUp({
+        // Use isolated client so signUp does NOT hijack the admin's session
+        const isolated = createIsolatedClient()
+        if (!isolated) throw new Error('Erro ao criar client isolado')
+
+        // 1. Create auth user via isolated signUp (won't change admin session)
+        const { data: authData, error: authError } = await isolated.auth.signUp({
           email: email.trim(),
           password,
           options: {
@@ -107,7 +111,7 @@ function AddStudentModal({ onClose, onCreated }) {
         })
         if (authError) throw authError
 
-        // 2. Upsert profile (trigger may already create it, but ensure name/role)
+        // 2. Upsert profile using the main admin client (has RLS permissions)
         if (authData?.user?.id) {
           await sb.from('profiles').upsert({
             id: authData.user.id,

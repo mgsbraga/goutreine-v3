@@ -14,4 +14,12 @@ if (isConfigured) {
   }
 }
 
-export { sb, isConfigured }
+// Isolated client for admin operations (e.g. signUp) that must NOT change the current session
+function createIsolatedClient() {
+  if (!isConfigured) return null
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+}
+
+export { sb, isConfigured, createIsolatedClient, SUPABASE_URL, SUPABASE_ANON_KEY }
