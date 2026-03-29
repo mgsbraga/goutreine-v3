@@ -1,38 +1,77 @@
 import { useState, useEffect, useRef } from 'react'
 import { store } from '../../../shared/constants/store'
 import * as exercisesService from '../../../services/exercises'
+import { getMuscleGroupColor, getMuscleGroupName, getExerciseActivations, exerciseHasMuscleGroup } from '../../../shared/utils/muscle-groups'
 import { IconPlus, IconEdit, IconDelete, IconSearch } from '../../../shared/components/icons'
 import AdminLayout from '../AdminLayout'
 
-function MuscleGroupBadge({ muscleGroupId }) {
-  const group = store.muscle_groups.find((g) => g.id === muscleGroupId)
-  if (!group) return null
+function ActivationBadges({ exercise }) {
+  const activations = getExerciseActivations(exercise)
+  if (activations.length === 0) return null
   return (
-    <span className="inline-block bg-brand-secondary text-brand-muted text-xs px-2 py-0.5 rounded-full">
-      {group.name}
-    </span>
+    <div className="flex items-center gap-1 flex-wrap">
+      {activations.map((a, i) => (
+        <span
+          key={a.group_id}
+          className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getMuscleGroupColor(a.group_id)} ${i > 0 ? 'opacity-60' : ''}`}
+        >
+          {getMuscleGroupName(a.group_id)}{activations.length > 1 ? ` ${a.pct}%` : ''}
+        </span>
+      ))}
+    </div>
   )
 }
 
 function ExerciseModal({ exercise, muscleGroups, onSave, onClose }) {
   const [name, setName] = useState(exercise?.name ?? '')
-  const [muscleGroupId, setMuscleGroupId] = useState(exercise?.muscle_group_id ?? (muscleGroups[0]?.id ?? ''))
   const [description, setDescription] = useState(exercise?.description ?? '')
+  const [activations, setActivations] = useState(() => {
+    const existing = getExerciseActivations(exercise)
+    if (existing.length > 0) return existing.map(a => ({ group_id: String(a.group_id), pct: String(a.pct) }))
+    return [{ group_id: String(muscleGroups[0]?.id ?? ''), pct: '100' }]
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const nameRef = useRef(null)
 
-  useEffect(() => {
-    nameRef.current?.focus()
-  }, [])
+  useEffect(() => { nameRef.current?.focus() }, [])
+
+  function addActivation() {
+    if (activations.length >= 3) return
+    const usedIds = activations.map(a => a.group_id)
+    const nextGroup = muscleGroups.find(g => !usedIds.includes(String(g.id)))
+    setActivations(prev => [...prev, { group_id: String(nextGroup?.id || muscleGroups[0]?.id || ''), pct: '10' }])
+  }
+
+  function removeActivation(idx) {
+    if (activations.length <= 1) return
+    setActivations(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function updateActivation(idx, field, value) {
+    setActivations(prev => prev.map((a, i) => i === idx ? { ...a, [field]: value } : a))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim()) return setError('Nome é obrigatório.')
+    const totalPct = activations.reduce((sum, a) => sum + (Number(a.pct) || 0), 0)
+    if (totalPct !== 100) return setError(`Total de ativação deve ser 100% (atual: ${totalPct}%).`)
+    if (activations.some(a => !a.group_id)) return setError('Selecione o grupo muscular.')
     setError(null)
     setSaving(true)
     try {
-      await onSave({ name: name.trim(), muscleGroupId: Number(muscleGroupId), description: description.trim() })
+      const parsedActivations = activations.map(a => ({
+        group_id: Number(a.group_id),
+        pct: Number(a.pct) || 0,
+      }))
+      const primaryGroupId = [...parsedActivations].sort((a, b) => b.pct - a.pct)[0].group_id
+      await onSave({
+        name: name.trim(),
+        muscleGroupId: primaryGroupId,
+        description: description.trim(),
+        activations: parsedActivations,
+      })
       onClose()
     } catch (err) {
       setError(err.message || 'Erro ao salvar exercício.')
@@ -41,8 +80,10 @@ function ExerciseModal({ exercise, muscleGroups, onSave, onClose }) {
     }
   }
 
+  const totalPct = activations.reduce((sum, a) => sum + (Number(a.pct) || 0), 0)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
         <h2 className="text-lg font-bold">
           {exercise ? 'Editar Exercício' : 'Novo Exercício'}
@@ -61,17 +102,53 @@ function ExerciseModal({ exercise, muscleGroups, onSave, onClose }) {
             />
           </div>
 
+          {/* Muscle activation rows */}
           <div>
-            <label className="block text-sm text-brand-muted mb-1">Grupo Muscular</label>
-            <select
-              value={muscleGroupId}
-              onChange={(e) => setMuscleGroupId(e.target.value)}
-              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
-            >
-              {muscleGroups.map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm text-brand-muted">Ativação Muscular</label>
+              <span className={`text-xs font-semibold ${totalPct === 100 ? 'text-brand-green' : 'text-red-400'}`}>
+                {totalPct}%
+              </span>
+            </div>
+            <div className="space-y-2">
+              {activations.map((a, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <select
+                    value={a.group_id}
+                    onChange={e => updateActivation(idx, 'group_id', e.target.value)}
+                    className="flex-1 bg-brand-dark border border-brand-secondary rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
+                  >
+                    {muscleGroups.map(g => (
+                      <option key={g.id} value={String(g.id)}>{g.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="100"
+                      value={a.pct}
+                      onChange={e => updateActivation(idx, 'pct', e.target.value)}
+                      className="w-14 bg-brand-dark border border-brand-secondary rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-brand-green"
+                    />
+                    <span className="text-xs text-brand-muted">%</span>
+                  </div>
+                  {activations.length > 1 && (
+                    <button type="button" onClick={() => removeActivation(idx)} className="text-red-400 hover:text-red-300 text-sm px-1">✕</button>
+                  )}
+                </div>
               ))}
-            </select>
+            </div>
+            {activations.length < 3 && (
+              <button
+                type="button"
+                onClick={addActivation}
+                className="mt-2 text-xs text-brand-green hover:underline"
+              >
+                + Adicionar grupo
+              </button>
+            )}
           </div>
 
           <div>
@@ -80,7 +157,7 @@ function ExerciseModal({ exercise, muscleGroups, onSave, onClose }) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descrição opcional..."
-              rows={3}
+              rows={2}
               className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green resize-none"
             />
           </div>
@@ -88,18 +165,10 @@ function ExerciseModal({ exercise, muscleGroups, onSave, onClose }) {
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:bg-opacity-80 transition-colors"
-            >
+            <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:opacity-80 transition-opacity">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-60"
-            >
+            <button type="submit" disabled={saving} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60">
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
@@ -121,15 +190,15 @@ export function ExercisesContent() {
   const filtered = exercises.filter((ex) => {
     const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase()) ||
       (ex.description || '').toLowerCase().includes(search.toLowerCase())
-    const matchesGroup = !filterGroup || String(ex.muscle_group_id) === filterGroup
+    const matchesGroup = !filterGroup || exerciseHasMuscleGroup(ex, Number(filterGroup))
     return matchesSearch && matchesGroup
   })
 
-  async function handleSave({ name, muscleGroupId, description }) {
+  async function handleSave({ name, muscleGroupId, description, activations }) {
     if (editingExercise) {
-      await exercisesService.updateExercise(editingExercise.id, { name, muscleGroupId, description })
+      await exercisesService.updateExercise(editingExercise.id, { name, muscleGroupId, description, activations })
     } else {
-      await exercisesService.createExercise({ name, muscleGroupId, description })
+      await exercisesService.createExercise({ name, muscleGroupId, description, activations })
     }
     setExercises([...store.exercises])
     setEditingExercise(null)
@@ -210,7 +279,7 @@ export function ExercisesContent() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-white">{ex.name}</span>
-                  <MuscleGroupBadge muscleGroupId={ex.muscle_group_id} />
+                  <ActivationBadges exercise={ex} />
                 </div>
                 {ex.description && (
                   <p className="text-brand-muted text-sm mt-0.5 truncate">{ex.description}</p>

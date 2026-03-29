@@ -4,7 +4,7 @@ import { store } from '../../../shared/constants/store'
 import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
 import { getExerciseName, getActivePhase, getCurrentWeekForPhase, getSchemeForPhase } from '../../../shared/utils/phase-helpers'
-import { getMuscleGroupName, getMuscleGroupColor } from '../../../shared/utils/muscle-groups'
+import { getMuscleGroupName, getMuscleGroupColor, getExerciseActivations, exerciseHasMuscleGroup } from '../../../shared/utils/muscle-groups'
 import { Chart } from '../../../lib/chart'
 import AdminLayout from '../AdminLayout'
 
@@ -216,7 +216,7 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
     store.exercises.some(e => e.muscle_group_id === g.id)
   )
   const filteredExercises = selectedGroup
-    ? store.exercises.filter(e => e.muscle_group_id === parseInt(selectedGroup))
+    ? store.exercises.filter(e => exerciseHasMuscleGroup(e, parseInt(selectedGroup)))
     : []
 
   async function handleSubmit(e) {
@@ -434,8 +434,9 @@ function PlanEditor({ plan, onRefresh }) {
         <div className="space-y-1">
           {exercises.map((pe, idx) => {
             const ex = store.exercises.find(e => e.id === pe.exercise_id)
-            const groupColor = ex ? getMuscleGroupColor(ex.muscle_group_id) : ''
-            const groupName = ex ? getMuscleGroupName(ex.muscle_group_id) : ''
+            const activations = ex ? getExerciseActivations(ex) : []
+            const primaryColor = activations.length > 0 ? getMuscleGroupColor(activations[0].group_id) : ''
+            const primaryName = activations.length > 0 ? getMuscleGroupName(activations[0].group_id) : ''
             const wc = store.week_configs.find(c => c.plan_exercise_id === pe.id && c.week === 1)
             const prevPe = idx > 0 ? exercises[idx - 1] : null
             const isConjugated = pe.superset_group && prevPe?.superset_group === pe.superset_group
@@ -446,7 +447,7 @@ function PlanEditor({ plan, onRefresh }) {
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
                     <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
-                    {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
+                    {primaryName && <span className={`muscle-badge text-[10px] ${primaryColor}`}>{primaryName}</span>}
                     {!isEditing && wc && (
                       <span className="text-xs text-brand-green font-medium whitespace-nowrap">
                         {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}

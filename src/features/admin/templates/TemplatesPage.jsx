@@ -3,7 +3,7 @@ import { store } from '../../../shared/constants/store'
 import * as templatesService from '../../../services/templates'
 import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
-import { getMuscleGroupColor, getMuscleGroupName } from '../../../shared/utils/muscle-groups'
+import { getMuscleGroupColor, getMuscleGroupName, getExerciseActivations, exerciseHasMuscleGroup } from '../../../shared/utils/muscle-groups'
 import { IconPlus } from '../../../shared/components/icons'
 import { SchemesContent } from '../schemes/SchemesPage'
 import { ExercisesContent } from '../exercises/ExercisesPage'
@@ -133,7 +133,7 @@ function AddExerciseModal({ templatePlanId, totalWeeks, onSave, onClose }) {
   const [saving, setSaving] = useState(false)
 
   const groups = store.muscle_groups.filter(g => store.exercises.some(e => e.muscle_group_id === g.id))
-  const filteredExercises = selectedGroup ? store.exercises.filter(e => e.muscle_group_id === parseInt(selectedGroup)) : []
+  const filteredExercises = selectedGroup ? store.exercises.filter(e => exerciseHasMuscleGroup(e, parseInt(selectedGroup))) : []
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -341,8 +341,9 @@ function TemplatePlanEditor({ plan, template, onRefresh }) {
         <div className="space-y-1">
           {exercises.map((te, idx) => {
             const ex = store.exercises.find(e => e.id === te.exercise_id)
-            const groupColor = ex ? getMuscleGroupColor(ex.muscle_group_id) : ''
-            const groupName = ex ? getMuscleGroupName(ex.muscle_group_id) : ''
+            const activations = ex ? getExerciseActivations(ex) : []
+            const groupColor = activations.length > 0 ? getMuscleGroupColor(activations[0].group_id) : ''
+            const groupName = activations.length > 0 ? getMuscleGroupName(activations[0].group_id) : ''
             const wc = store.template_week_configs.find(c => c.template_exercise_id === te.id && c.week === 1)
             const prevTe = idx > 0 ? exercises[idx - 1] : null
             const isConjugated = te.superset_group && prevTe?.superset_group === te.superset_group

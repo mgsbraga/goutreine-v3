@@ -13,30 +13,68 @@ export async function listMuscleGroups() {
   return data || []
 }
 
-export async function createExercise({ name, muscleGroupId, description }) {
+// Derive primary muscle_group_id from activations (highest %)
+function derivePrimaryGroup(activations, fallbackGroupId) {
+  if (!activations || activations.length === 0) return fallbackGroupId
+  const sorted = [...activations].sort((a, b) => b.pct - a.pct)
+  return sorted[0].group_id
+}
+
+export async function createExercise({ name, muscleGroupId, description, activations }) {
+  // If activations provided, derive muscle_group_id from highest %
+  const finalActivations = activations && activations.length > 0 ? activations : null
+  const finalGroupId = finalActivations
+    ? derivePrimaryGroup(finalActivations, muscleGroupId)
+    : muscleGroupId
+
   if (!sb) {
-    const ex = { id: store.exercises.length + 100, name, muscle_group_id: muscleGroupId, description }
+    const ex = {
+      id: store.exercises.length + 100, name,
+      muscle_group_id: finalGroupId, description,
+      muscle_activations: finalActivations,
+    }
     store.exercises.push(ex)
     return ex
   }
-  const { data, error } = await sb.from('exercises')
-    .insert({ name, muscle_group_id: muscleGroupId, description })
-    .select().single()
+  const payload = {
+    name, muscle_group_id: finalGroupId, description,
+    muscle_activations: finalActivations,
+  }
+  const { data, error } = await sb.from('exercises').insert(payload).select().single()
   if (error) throw error
+  // Parse JSON if Supabase returns string
+  if (data.muscle_activations && typeof data.muscle_activations === 'string') {
+    try { data.muscle_activations = JSON.parse(data.muscle_activations) } catch {}
+  }
   store.exercises.push(data)
   return data
 }
 
-export async function updateExercise(id, { name, muscleGroupId, description }) {
+export async function updateExercise(id, { name, muscleGroupId, description, activations }) {
+  const finalActivations = activations && activations.length > 0 ? activations : null
+  const finalGroupId = finalActivations
+    ? derivePrimaryGroup(finalActivations, muscleGroupId)
+    : muscleGroupId
+
   if (!sb) {
     const ex = store.exercises.find((e) => e.id === id)
-    if (ex) { ex.name = name; ex.muscle_group_id = muscleGroupId; ex.description = description }
+    if (ex) {
+      ex.name = name
+      ex.muscle_group_id = finalGroupId
+      ex.description = description
+      ex.muscle_activations = finalActivations
+    }
     return ex
   }
-  const { data, error } = await sb.from('exercises')
-    .update({ name, muscle_group_id: muscleGroupId, description })
-    .eq('id', id).select().single()
+  const payload = {
+    name, muscle_group_id: finalGroupId, description,
+    muscle_activations: finalActivations,
+  }
+  const { data, error } = await sb.from('exercises').update(payload).eq('id', id).select().single()
   if (error) throw error
+  if (data.muscle_activations && typeof data.muscle_activations === 'string') {
+    try { data.muscle_activations = JSON.parse(data.muscle_activations) } catch {}
+  }
   const idx = store.exercises.findIndex((e) => e.id === id)
   if (idx >= 0) store.exercises[idx] = data
   return data
