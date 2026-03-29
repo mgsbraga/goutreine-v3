@@ -30,7 +30,15 @@ function isNavActive(href) {
 export default function AdminLayout({ children }) {
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true')
+
+  function toggleCollapsed() {
+    setCollapsed(c => {
+      const next = !c
+      localStorage.setItem('sidebar-collapsed', String(next))
+      return next
+    })
+  }
 
   async function handleLogout() {
     await logout()
@@ -80,7 +88,7 @@ export default function AdminLayout({ children }) {
         {/* Collapse toggle (desktop only) */}
         {!sidebarOpen && (
           <button
-            onClick={() => setCollapsed(c => !c)}
+            onClick={toggleCollapsed}
             className="px-4 py-2 text-brand-muted hover:text-white transition-colors text-xs border-t border-b border-brand-secondary flex items-center justify-center gap-2"
             title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
