@@ -2116,6 +2116,24 @@ export default function TreinosPage({ params }) {
 
   const selectedStudent = students.find((s) => s.id === selectedId)
 
+  // Weekly goal
+  const [weeklyGoal, setWeeklyGoal] = useState(selectedStudent?.weekly_goal || '')
+  // Sync goal when student changes
+  useEffect(() => {
+    setWeeklyGoal(selectedStudent?.weekly_goal || '')
+  }, [selectedId])
+
+  async function handleSaveGoal(value) {
+    const goal = Number(value) || 0
+    setWeeklyGoal(value)
+    if (selectedStudent) {
+      selectedStudent.weekly_goal = goal
+      if (sb) {
+        await sb.from('profiles').update({ weekly_goal: goal }).eq('id', selectedId).catch(() => {})
+      }
+    }
+  }
+
   return (
     <AdminLayout>
       <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -2125,19 +2143,38 @@ export default function TreinosPage({ params }) {
           <p className="text-brand-muted text-sm mt-1">Gerenciamento de fases de treino por aluno</p>
         </div>
 
-        {/* Student selector */}
+        {/* Student selector + weekly goal */}
         {students.length > 0 ? (
-          <div>
-            <label className="block text-sm text-brand-muted mb-1.5">Aluno</label>
-            <select
-              value={selectedId ?? ''}
-              onChange={(e) => { setSelectedId(e.target.value); setTab('treinos') }}
-              className="bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green w-full max-w-xs"
-            >
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+          <div className="flex items-end gap-4 flex-wrap">
+            <div className="flex-1 min-w-[180px]">
+              <label className="block text-sm text-brand-muted mb-1.5">Aluno</label>
+              <select
+                value={selectedId ?? ''}
+                onChange={(e) => { setSelectedId(e.target.value); setTab('treinos') }}
+                className="bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green w-full"
+              >
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-[140px]">
+              <label className="block text-sm text-brand-muted mb-1.5">Meta semanal</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="7"
+                  value={weeklyGoal}
+                  onChange={e => setWeeklyGoal(e.target.value)}
+                  onBlur={e => handleSaveGoal(e.target.value)}
+                  placeholder="—"
+                  className="w-16 bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-brand-green"
+                />
+                <span className="text-xs text-brand-muted">×/sem</span>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
