@@ -255,3 +255,187 @@ export async function applyTemplateToStudent(templateId, studentId, { name, star
   })
   return newPhase
 }
+
+// --- High-level: Copy Phase to Other Students ---
+
+export async function copyPhaseToStudents(phaseId, studentIds) {
+  const phase = store.training_phases.find((p) => p.id === phaseId)
+  if (!phase) return []
+
+  const srcPlans = store.training_plans.filter((p) => p.phase_id === phaseId)
+  const results = []
+
+  for (const studentId of studentIds) {
+    if (sb) {
+      const { data: newPhase, error: phaseErr } = await sb.from('training_phases').insert({
+        student_id: studentId, name: phase.name,
+        start_date: phase.start_date, end_date: phase.end_date || null,
+        total_weeks: phase.total_weeks, status: 'planned',
+        scheme_id: phase.scheme_id || null,
+      }).select().single()
+      if (phaseErr) throw phaseErr
+      store.training_phases.push(newPhase)
+
+      for (const sp of srcPlans) {
+        const { data: newPlan, error: planErr } = await sb.from('training_plans').insert({
+          phase_id: newPhase.id, name: sp.name, day_label: sp.day_label, muscle_groups: sp.muscle_groups,
+        }).select().single()
+        if (planErr) throw planErr
+        store.training_plans.push(newPlan)
+
+        const srcExercises = store.plan_exercises
+          .filter((pe) => pe.plan_id === sp.id)
+          .sort((a, b) => (a.order || a.exercise_order || 0) - (b.order || b.exercise_order || 0))
+        for (const se of srcExercises) {
+          const { data: newPe, error: peErr } = await sb.from('plan_exercises').insert({
+            plan_id: newPlan.id, exercise_id: se.exercise_id,
+            rest_seconds: se.rest_seconds, notes: se.notes,
+            exercise_order: se.order || se.exercise_order || 1,
+            superset_group: se.superset_group || null,
+          }).select().single()
+          if (peErr) throw peErr
+          store.plan_exercises.push({ ...newPe, order: newPe.exercise_order || se.order })
+
+          const srcWcs = store.week_configs.filter((wc) => wc.plan_exercise_id === se.id)
+          if (srcWcs.length > 0) {
+            const wcRows = srcWcs.map((wc) => ({
+              plan_exercise_id: newPe.id, week: wc.week, sets: wc.sets,
+              reps_min: wc.reps_min, reps_max: wc.reps_max,
+              drop_sets: wc.drop_sets, suggested_weight_kg: wc.suggested_weight_kg, notes: wc.notes,
+            }))
+            const { data: newWcs, error: wcErr } = await sb.from('week_configs').insert(wcRows).select()
+            if (wcErr) throw wcErr
+            store.week_configs.push(...(newWcs || []))
+          }
+        }
+      }
+      results.push(newPhase)
+    } else {
+      // Mock mode
+      const newPhaseId = Math.max(0, ...store.training_phases.map((p) => p.id)) + 1
+      const newPhase = {
+        id: newPhaseId, student_id: studentId, name: phase.name,
+        start_date: phase.start_date, end_date: phase.end_date || '',
+        total_weeks: phase.total_weeks, status: 'planned', scheme_id: phase.scheme_id || null,
+      }
+      store.training_phases.push(newPhase)
+
+      for (const sp of srcPlans) {
+        const newPlanId = Math.max(0, ...store.training_plans.map((p) => p.id)) + 1
+        store.training_plans.push({
+          id: newPlanId, phase_id: newPhaseId, name: sp.name,
+          day_label: sp.day_label, muscle_groups: [...(sp.muscle_groups || [])],
+        })
+        const srcExercises = store.plan_exercises
+          .filter((pe) => pe.plan_id === sp.id)
+          .sort((a, b) => (a.order || a.exercise_order || 0) - (b.order || b.exercise_order || 0))
+        srcExercises.forEach((se) => {
+          const newPeId = Math.max(0, ...store.plan_exercises.map((p) => p.id)) + 1
+          store.plan_exercises.push({
+            id: newPeId, plan_id: newPlanId, exercise_id: se.exercise_id,
+            rest_seconds: se.rest_seconds, notes: se.notes, order: se.order,
+            superset_group: se.superset_group || null,
+          })
+          const srcWcs = store.week_configs.filter((wc) => wc.plan_exercise_id === se.id)
+          srcWcs.forEach((wc) => {
+            const newWcId = Math.max(0, ...store.week_configs.map((w) => w.id)) + 1
+            store.week_configs.push({
+              id: newWcId, plan_exercise_id: newPeId, week: wc.week,
+              sets: wc.sets, reps_min: wc.reps_min, reps_max: wc.reps_max,
+              drop_sets: wc.drop_sets, suggested_weight_kg: wc.suggested_weight_kg, notes: wc.notes,
+            })
+          })
+        })
+      }
+      results.push(newPhase)
+    }
+  }
+  return results
+}
+
+// --- High-level: Save Phase as Template ---
+
+export async function savePhaseAsTemplate(phaseId, { name, description }) {
+  const phase = store.training_phases.find((p) => p.id === phaseId)
+  if (!phase) return null
+
+  const srcPlans = store.training_plans.filter((p) => p.phase_id === phaseId)
+
+  if (sb) {
+    const { data: newTemplate, error: tErr } = await sb.from('templates').insert({
+      name, description: description || null, total_weeks: phase.total_weeks, scheme_id: phase.scheme_id || null,
+    }).select().single()
+    if (tErr) throw tErr
+    store.templates.push(newTemplate)
+
+    for (const sp of srcPlans) {
+      const { data: newTp, error: tpErr } = await sb.from('template_plans').insert({
+        template_id: newTemplate.id, name: sp.name, day_label: sp.day_label, muscle_groups: sp.muscle_groups,
+      }).select().single()
+      if (tpErr) throw tpErr
+      store.template_plans.push(newTp)
+
+      const srcExercises = store.plan_exercises
+        .filter((pe) => pe.plan_id === sp.id)
+        .sort((a, b) => (a.order || a.exercise_order || 0) - (b.order || b.exercise_order || 0))
+      for (const se of srcExercises) {
+        const { data: newTe, error: teErr } = await sb.from('template_exercises').insert({
+          template_plan_id: newTp.id, exercise_id: se.exercise_id,
+          rest_seconds: se.rest_seconds, notes: se.notes, exercise_order: se.order || se.exercise_order || 1,
+        }).select().single()
+        if (teErr) throw teErr
+        store.template_exercises.push({ ...newTe, order: newTe.exercise_order || se.order })
+
+        const srcWcs = store.week_configs.filter((wc) => wc.plan_exercise_id === se.id)
+        if (srcWcs.length > 0) {
+          const wcRows = srcWcs.map((wc) => ({
+            template_exercise_id: newTe.id, week: wc.week, sets: wc.sets,
+            reps_min: wc.reps_min, reps_max: wc.reps_max,
+            drop_sets: wc.drop_sets, suggested_weight_kg: wc.suggested_weight_kg, notes: wc.notes,
+          }))
+          const { data: newWcs, error: wcErr } = await sb.from('template_week_configs').insert(wcRows).select()
+          if (wcErr) throw wcErr
+          store.template_week_configs.push(...(newWcs || []))
+        }
+      }
+    }
+    return newTemplate
+  }
+
+  // Mock mode
+  const newTemplateId = Math.max(0, ...store.templates.map((t) => t.id)) + 1
+  const newTemplate = {
+    id: newTemplateId, name, description: description || '',
+    total_weeks: phase.total_weeks, scheme_id: phase.scheme_id || null,
+    created_at: new Date().toISOString().split('T')[0],
+  }
+  store.templates.push(newTemplate)
+
+  for (const sp of srcPlans) {
+    const newTpId = Math.max(0, ...store.template_plans.map((p) => p.id)) + 1
+    store.template_plans.push({
+      id: newTpId, template_id: newTemplateId, name: sp.name,
+      day_label: sp.day_label, muscle_groups: [...(sp.muscle_groups || [])],
+    })
+    const srcExercises = store.plan_exercises
+      .filter((pe) => pe.plan_id === sp.id)
+      .sort((a, b) => (a.order || a.exercise_order || 0) - (b.order || b.exercise_order || 0))
+    srcExercises.forEach((se) => {
+      const newTeId = Math.max(0, ...store.template_exercises.map((e) => e.id)) + 1
+      store.template_exercises.push({
+        id: newTeId, template_plan_id: newTpId, exercise_id: se.exercise_id,
+        rest_seconds: se.rest_seconds, notes: se.notes, order: se.order,
+      })
+      const srcWcs = store.week_configs.filter((wc) => wc.plan_exercise_id === se.id)
+      srcWcs.forEach((wc) => {
+        const newWcId = Math.max(0, ...store.template_week_configs.map((w) => w.id)) + 1
+        store.template_week_configs.push({
+          id: newWcId, template_exercise_id: newTeId, week: wc.week,
+          sets: wc.sets, reps_min: wc.reps_min, reps_max: wc.reps_max,
+          drop_sets: wc.drop_sets, suggested_weight_kg: wc.suggested_weight_kg, notes: wc.notes,
+        })
+      })
+    })
+  }
+  return newTemplate
+}

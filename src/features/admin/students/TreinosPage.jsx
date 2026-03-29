@@ -432,10 +432,153 @@ function PlanEditor({ plan, onRefresh }) {
   )
 }
 
+function CopyPhaseModal({ phase, onClose }) {
+  const [selected, setSelected] = useState([])
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const students = store.users
+    .filter(u => u.role === 'student' && u.id !== phase.student_id)
+    .filter(u => !search || (u.name || u.email || '').toLowerCase().includes(search.toLowerCase()))
+
+  function toggleStudent(id) {
+    setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
+  }
+
+  async function handleCopy() {
+    if (selected.length === 0) return
+    setSaving(true)
+    try {
+      await programsService.copyPhaseToStudents(phase.id, selected)
+      setDone(true)
+    } catch (err) {
+      alert('Erro ao copiar: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+        <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 text-center space-y-4">
+          <p className="text-brand-green font-semibold">Periodização copiada para {selected.length} aluno{selected.length !== 1 ? 's' : ''}!</p>
+          <button onClick={onClose} className="bg-brand-green text-brand-dark px-6 py-2 rounded-lg text-sm font-semibold">Fechar</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Copiar "{phase.name}" para...</h2>
+
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar aluno..."
+          className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
+        />
+
+        <div className="max-h-60 overflow-y-auto space-y-1">
+          {students.length === 0 ? (
+            <p className="text-brand-muted text-sm text-center py-4">Nenhum aluno encontrado.</p>
+          ) : (
+            students.map(s => (
+              <label key={s.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-brand-secondary hover:bg-opacity-40 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(s.id)}
+                  onChange={() => toggleStudent(s.id)}
+                  className="accent-brand-green w-4 h-4 shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm text-white truncate">{s.name || 'Sem nome'}</p>
+                  <p className="text-xs text-brand-muted truncate">{s.email}</p>
+                </div>
+              </label>
+            ))
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+          <button
+            onClick={handleCopy}
+            disabled={saving || selected.length === 0}
+            className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            {saving ? 'Copiando...' : `Copiar para ${selected.length} aluno${selected.length !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SaveAsTemplateModal({ phase, onClose }) {
+  const [name, setName] = useState(phase.name)
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      await programsService.savePhaseAsTemplate(phase.id, { name: name.trim(), description: description.trim() })
+      setDone(true)
+    } catch (err) {
+      alert('Erro ao salvar template: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+        <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 text-center space-y-4">
+          <p className="text-brand-green font-semibold">Template "{name}" criado com sucesso!</p>
+          <button onClick={onClose} className="bg-brand-green text-brand-dark px-6 py-2 rounded-lg text-sm font-semibold">Fechar</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Salvar como Template</h2>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Nome do Template</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+          </div>
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Descrição (opcional)</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Ex: Hipertrofia intermediário, 4x por semana" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green resize-none" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+            <button type="submit" disabled={saving || !name.trim()} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar Template'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function PhaseCard({ phase, onStatusChange, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showAddPlan, setShowAddPlan] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
 
   const plans = store.training_plans.filter((p) => p.phase_id === phase.id)
 
@@ -528,6 +671,20 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
               </button>
             )}
             <button
+              onClick={() => setShowCopyModal(true)}
+              className="text-xs bg-brand-secondary text-white border border-brand-secondary px-3 py-1.5 rounded-lg font-medium hover:bg-opacity-80 transition-colors"
+              title="Copiar para outros alunos"
+            >
+              Copiar
+            </button>
+            <button
+              onClick={() => setShowTemplateModal(true)}
+              className="text-xs bg-brand-secondary text-white border border-brand-secondary px-3 py-1.5 rounded-lg font-medium hover:bg-opacity-80 transition-colors"
+              title="Salvar como template reutilizável"
+            >
+              → Template
+            </button>
+            <button
               onClick={handleDeletePhase}
               disabled={loading}
               className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1.5 disabled:opacity-50"
@@ -565,6 +722,13 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
             />
           )}
         </div>
+      )}
+
+      {showCopyModal && (
+        <CopyPhaseModal phase={phase} onClose={() => setShowCopyModal(false)} />
+      )}
+      {showTemplateModal && (
+        <SaveAsTemplateModal phase={phase} onClose={() => setShowTemplateModal(false)} />
       )}
     </div>
   )
