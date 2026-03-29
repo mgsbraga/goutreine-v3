@@ -69,7 +69,7 @@ function AddPhaseModal({ studentId, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
-        <h2 className="text-lg font-bold">Adicionar Treino</h2>
+        <h2 className="text-lg font-bold">Adicionar Programa</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -1328,7 +1328,7 @@ function StudentTreinosContent({ studentId }) {
           className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          Adicionar Treino
+          Adicionar Programa
         </button>
       </div>
 
@@ -1339,7 +1339,7 @@ function StudentTreinosContent({ studentId }) {
             onClick={() => setModalOpen(true)}
             className="bg-brand-green text-brand-dark px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
           >
-            Adicionar Primeiro Treino
+            Adicionar Primeiro Programa
           </button>
         </div>
       ) : (
