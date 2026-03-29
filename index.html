@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Goutreine - Seu Rastreador de Treinos</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="Sistema de rastreamento de treinos para personal trainers e alunos">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Goutreine">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png">
+</head>
+<body>
+    <div id="root">
+        <!-- Loading skeleton (CSS-only, shown before JS loads) -->
+        <div id="app-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a1a1a;color:#fff;font-family:system-ui,-apple-system,sans-serif;">
+            <div style="font-size:28px;font-weight:700;margin-bottom:8px;"><span style="color:#A4E44B;">Gou</span><span>treine</span></div>
+            <div style="width:40px;height:40px;border:3px solid #3a3a3a;border-top-color:#A4E44B;border-radius:50%;animation:spin .6s linear infinite;margin-top:16px;"></div>
+            <style>#app-loader{opacity:1;transition:opacity .3s}#app-loader.hide{opacity:0;pointer-events:none}@keyframes spin{to{transform:rotate(360deg)}}</style>
+        </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
