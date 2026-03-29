@@ -2,33 +2,48 @@ import { sb } from '../lib/supabase'
 import { store } from '../shared/constants/store'
 import { persistOfflineCache, restoreOfflineCache } from '../lib/offline-cache'
 
-// Hardcoded groups/exercises that may not exist in Supabase yet — merged in-memory after loading
-const EXTRA_MUSCLE_GROUPS = [
-  { id: 10, name: 'Cardio', icon: 'cardio' },
-  { id: 11, name: 'Core', icon: 'core' },
+// Groups/exercises to seed into Supabase on admin login
+const SEED_MUSCLE_GROUPS = [
+  { name: 'Cardio', icon: 'cardio' },
+  { name: 'Core', icon: 'core' },
 ]
-const EXTRA_EXERCISES = [
-  { id: 21, name: 'Bike', muscle_group_id: 10, description: 'Bicicleta ergométrica' },
-  { id: 22, name: 'Remo Ergômetro', muscle_group_id: 10, description: 'Remo ergômetro' },
-  { id: 23, name: 'Transport', muscle_group_id: 10, description: 'Transport / elíptico' },
-  { id: 24, name: 'S-Force', muscle_group_id: 10, description: 'S-Force / air bike' },
-  { id: 25, name: 'Esteira', muscle_group_id: 10, description: 'Caminhada ou corrida' },
-  { id: 26, name: 'Escada', muscle_group_id: 10, description: 'Simulador de escada' },
-  { id: 27, name: 'Abdominal Crunch', muscle_group_id: 11, description: 'Abdominal tradicional' },
-  { id: 28, name: 'Prancha', muscle_group_id: 11, description: 'Prancha isométrica' },
-  { id: 29, name: 'Abdominal Infra', muscle_group_id: 11, description: 'Elevação de pernas' },
-  { id: 30, name: 'Russian Twist', muscle_group_id: 11, description: 'Rotação com carga para oblíquos' },
-  { id: 31, name: 'Abdominal na Roda', muscle_group_id: 11, description: 'Roda abdominal / ab wheel' },
+const SEED_EXERCISES = [
+  { name: 'Bike', group: 'Cardio', description: 'Bicicleta ergométrica' },
+  { name: 'Remo Ergômetro', group: 'Cardio', description: 'Remo ergômetro' },
+  { name: 'Transport', group: 'Cardio', description: 'Transport / elíptico' },
+  { name: 'S-Force', group: 'Cardio', description: 'S-Force / air bike' },
+  { name: 'Esteira', group: 'Cardio', description: 'Caminhada ou corrida' },
+  { name: 'Escada', group: 'Cardio', description: 'Simulador de escada' },
+  { name: 'Abdominal Crunch', group: 'Core', description: 'Abdominal tradicional' },
+  { name: 'Prancha', group: 'Core', description: 'Prancha isométrica' },
+  { name: 'Abdominal Infra', group: 'Core', description: 'Elevação de pernas' },
+  { name: 'Russian Twist', group: 'Core', description: 'Rotação com carga para oblíquos' },
+  { name: 'Abdominal na Roda', group: 'Core', description: 'Roda abdominal / ab wheel' },
 ]
 
-function mergeDefaults(supabaseList, defaults, keyField = 'name') {
-  const result = [...supabaseList]
-  for (const dflt of defaults) {
-    if (!result.some(item => item[keyField] === dflt[keyField])) {
-      result.push(dflt)
+async function seedGroupsAndExercises(mgList, exList) {
+  // Seed missing muscle groups into Supabase
+  for (const seed of SEED_MUSCLE_GROUPS) {
+    if (!mgList.some(g => g.name === seed.name)) {
+      try {
+        const { data, error } = await sb.from('muscle_groups').insert(seed).select().single()
+        if (!error && data) mgList.push(data)
+      } catch (e) { console.warn('[Seed] muscle_group:', seed.name, e.message) }
     }
   }
-  return result
+  // Seed missing exercises into Supabase (using real group IDs from Supabase)
+  for (const seed of SEED_EXERCISES) {
+    if (!exList.some(e => e.name === seed.name)) {
+      const group = mgList.find(g => g.name === seed.group)
+      if (!group) continue
+      try {
+        const { data, error } = await sb.from('exercises')
+          .insert({ name: seed.name, muscle_group_id: group.id, description: seed.description })
+          .select().single()
+        if (!error && data) exList.push(data)
+      } catch (e) { console.warn('[Seed] exercise:', seed.name, e.message) }
+    }
+  }
 }
 
 export async function loadSupabaseCache(userId, role) {
@@ -38,8 +53,16 @@ export async function loadSupabaseCache(userId, role) {
     const { data: mg } = await sb.from('muscle_groups').select('*').order('id')
     const { data: ex } = await sb.from('exercises').select('*').order('id')
 
-    store.muscle_groups = mergeDefaults(mg || [], EXTRA_MUSCLE_GROUPS)
-    store.exercises = mergeDefaults(ex || [], EXTRA_EXERCISES)
+    const mgList = mg || []
+    const exList = ex || []
+
+    // Admin login: seed Cardio/Core into Supabase if missing
+    if (role === 'admin') {
+      await seedGroupsAndExercises(mgList, exList)
+    }
+
+    store.muscle_groups = mgList
+    store.exercises = exList
 
     const { data: templates } = await sb.from('templates').select('*').order('created_at', { ascending: false })
     store.templates = templates || []
