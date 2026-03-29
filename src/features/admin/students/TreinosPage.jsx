@@ -420,6 +420,13 @@ function PlanEditor({ plan, onRefresh }) {
         </div>
       )}
 
+      <button
+        onClick={() => setShowAddExercise(true)}
+        className="w-full text-xs text-brand-green border border-brand-green border-opacity-30 rounded-lg py-2 font-medium hover:bg-brand-green hover:bg-opacity-10 transition-colors"
+      >
+        + Adicionar Exercício
+      </button>
+
       {showAddExercise && (
         <AddExerciseModal planId={plan.id} phaseId={plan.phase_id} onSave={handleAddExercise} onClose={() => setShowAddExercise(false)} />
       )}
