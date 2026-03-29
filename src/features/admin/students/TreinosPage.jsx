@@ -341,10 +341,7 @@ function PlanEditor({ plan, onRefresh }) {
           <span className="text-sm font-semibold text-white">{plan.name}</span>
           {plan.day_label && <span className="text-xs text-brand-muted">{plan.day_label}</span>}
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowAddExercise(true)} className="text-xs bg-brand-green bg-opacity-15 text-brand-green px-2 py-1 rounded font-medium hover:bg-opacity-25 transition-colors">+ Exercício</button>
-          <button onClick={handleDeletePlan} className="text-xs text-red-400 hover:text-red-300 transition-colors px-1">Excluir</button>
-        </div>
+        <button onClick={handleDeletePlan} className="text-xs text-red-400 hover:text-red-300 transition-colors px-1">Excluir</button>
       </div>
 
       {exercises.length === 0 ? (
@@ -478,6 +475,17 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
     }
   }
 
+  async function handleDeletePhase() {
+    if (!confirm(`Excluir a fase "${phase.name}" e todos os seus treinos?`)) return
+    setLoading(true)
+    try {
+      await programsService.deletePhase(phase.id)
+      onRefresh()
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="bg-brand-card border border-brand-secondary rounded-xl overflow-hidden">
       {/* Phase header */}
@@ -515,6 +523,14 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
                 Concluir
               </button>
             )}
+            <button
+              onClick={handleDeletePhase}
+              disabled={loading}
+              className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1.5 disabled:opacity-50"
+              title="Excluir fase"
+            >
+              🗑
+            </button>
             <button
               onClick={() => setExpanded((v) => !v)}
               className="text-brand-muted hover:text-white transition-colors text-sm px-2 py-1.5"
