@@ -815,6 +815,20 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                 </button>
               )}
             </div>
+
+            {/* Early finish button — always visible when at least 1 set is done */}
+            {!isLastSet && completedSets > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm(`Finalizar treino com ${completedSets} de ${totalSets} séries? As séries não registradas serão ignoradas.`)) {
+                    handleFinishWorkout()
+                  }
+                }}
+                className="mt-3 w-full py-2.5 rounded-lg text-sm font-medium border border-brand-muted text-brand-muted hover:border-brand-green hover:text-brand-green transition-colors"
+              >
+                Finalizar Treino ({completedSets}/{totalSets} séries)
+              </button>
+            )}
           </>
         )}
       </div>
