@@ -710,43 +710,59 @@ const PHASE_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#EF4444', '#6B7280', '#A
 
 function PhaseWeekEditor({ phase, onClose, onSave }) {
   const scheme = getSchemeForPhase(phase)
-  const currentWeek = getCurrentWeekForPhase(phase) - 1 // 0-indexed
+  const currentWeek = getCurrentWeekForPhase(phase) - 1
+  const plans = store.training_plans.filter(p => p.phase_id === phase.id)
+
+  // All exercises across all plans, with their plan name
+  const allExercises = plans.flatMap(plan => {
+    return store.plan_exercises
+      .filter(pe => pe.plan_id === plan.id)
+      .sort((a, b) => (a.order ?? a.exercise_order ?? 0) - (b.order ?? b.exercise_order ?? 0))
+      .map(pe => {
+        const ex = store.exercises.find(e => e.id === pe.exercise_id)
+        return { pe, ex, planName: plan.name }
+      })
+  })
 
   const [weeks, setWeeks] = useState(() => {
     const total = phase.total_weeks || 8
     if (scheme?.configs) {
       return scheme.configs.slice(0, total).map(c => ({
-        phase: c.phase || 'BASE',
-        color: c.phase_color || '#3B82F6',
-        desc: c.description || '',
+        phase: c.phase || 'BASE', color: c.phase_color || '#3B82F6', desc: c.description || '',
       }))
     }
     return Array.from({ length: total }, () => ({ phase: 'BASE', color: '#3B82F6', desc: '' }))
+  })
+
+  // Exercise week configs: { [peId-week]: { sets, repsMin, repsMax, weight } }
+  const [exConfigs, setExConfigs] = useState(() => {
+    const map = {}
+    for (const { pe } of allExercises) {
+      const total = phase.total_weeks || 8
+      for (let w = 1; w <= total; w++) {
+        const wc = store.week_configs.find(c => c.plan_exercise_id === pe.id && c.week === w)
+        map[`${pe.id}-${w}`] = {
+          sets: wc?.sets ?? 3,
+          repsMin: wc?.reps_min ?? 8,
+          repsMax: wc?.reps_max ?? 12,
+          weight: wc?.suggested_weight_kg ?? 0,
+        }
+      }
+    }
+    return map
   })
 
   const [editingWeek, setEditingWeek] = useState(null)
   const [selectedColor, setSelectedColor] = useState('#3B82F6')
   const [customName, setCustomName] = useState('')
   const [desc, setDesc] = useState('')
-  const [multiMode, setMultiMode] = useState(false)
-  const [multiSelected, setMultiSelected] = useState(new Set())
   const [saving, setSaving] = useState(false)
 
   function clickWeek(i) {
-    if (multiMode && editingWeek !== null) {
-      if (i === editingWeek) return
-      setMultiSelected(prev => {
-        const next = new Set(prev)
-        next.has(i) ? next.delete(i) : next.add(i)
-        return next
-      })
-      return
-    }
     setEditingWeek(i)
     setSelectedColor(weeks[i].color)
     setCustomName(weeks[i].phase)
     setDesc(weeks[i].desc)
-    setMultiSelected(new Set([i]))
   }
 
   function pickPreset(preset) {
@@ -754,36 +770,78 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
     setSelectedColor(preset.color)
   }
 
-  function saveWeekEdit() {
+  function applyPhaseEdit() {
     const name = customName || 'BASE'
-    const targets = multiMode ? [...multiSelected] : (editingWeek !== null ? [editingWeek] : [])
     setWeeks(prev => {
       const next = [...prev]
-      targets.forEach(i => { next[i] = { phase: name, color: selectedColor, desc } })
+      next[editingWeek] = { phase: name, color: selectedColor, desc }
       return next
     })
-    setEditingWeek(null)
-    setMultiMode(false)
-    setMultiSelected(new Set())
   }
 
-  function closeWeekEdit() {
-    setEditingWeek(null)
-    setMultiMode(false)
-    setMultiSelected(new Set())
+  function updateExConfig(peId, week, field, value) {
+    setExConfigs(prev => ({
+      ...prev,
+      [`${peId}-${week}`]: { ...prev[`${peId}-${week}`], [field]: value },
+    }))
   }
 
   async function handleSaveAll() {
     setSaving(true)
     try {
-      // Build a custom scheme config from the edited weeks
+      const { sb } = await import('../../../lib/supabase')
+
+      // 1. Save phase labels
       const configs = weeks.map((w, i) => ({
-        week: i + 1,
-        phase: w.phase,
-        phase_color: w.color,
-        description: w.desc,
+        week: i + 1, phase: w.phase, phase_color: w.color, description: w.desc,
       }))
       await onSave(configs)
+
+      // 2. Save exercise week_configs in batch
+      if (sb && allExercises.length > 0) {
+        const wcRows = []
+        for (const { pe } of allExercises) {
+          const total = phase.total_weeks || 8
+          for (let w = 1; w <= total; w++) {
+            const cfg = exConfigs[`${pe.id}-${w}`]
+            if (cfg) {
+              wcRows.push({
+                plan_exercise_id: pe.id, week: w,
+                sets: Number(cfg.sets) || 3,
+                reps_min: Number(cfg.repsMin) || 8,
+                reps_max: Number(cfg.repsMax) || 12,
+                suggested_weight_kg: Number(cfg.weight) || 0,
+                drop_sets: 0, notes: '',
+              })
+            }
+          }
+        }
+        if (wcRows.length > 0) {
+          const { error } = await sb.from('week_configs').upsert(wcRows, { onConflict: 'plan_exercise_id,week' })
+          if (error) console.error('[WeekConfigs]', error)
+          // Update local store
+          for (const row of wcRows) {
+            const idx = store.week_configs.findIndex(wc => wc.plan_exercise_id === row.plan_exercise_id && wc.week === row.week)
+            if (idx >= 0) Object.assign(store.week_configs[idx], row)
+            else store.week_configs.push(row)
+          }
+        }
+      } else {
+        // Mock mode
+        for (const { pe } of allExercises) {
+          const total = phase.total_weeks || 8
+          const cfgs = []
+          for (let w = 1; w <= total; w++) {
+            const cfg = exConfigs[`${pe.id}-${w}`]
+            cfgs.push({
+              week: w, sets: Number(cfg?.sets) || 3, reps_min: Number(cfg?.repsMin) || 8,
+              reps_max: Number(cfg?.repsMax) || 12, suggested_weight_kg: Number(cfg?.weight) || 0, drop_sets: 0, notes: '',
+            })
+          }
+          await programsService.bulkUpdateWeekConfigs(pe.id, cfgs)
+        }
+      }
+
       onClose()
     } catch (err) {
       alert('Erro ao salvar: ' + (err.message || err))
@@ -792,23 +850,25 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
     }
   }
 
+  const weekNum = editingWeek !== null ? editingWeek + 1 : null
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-[640px] max-h-[90vh] overflow-y-auto p-6 space-y-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-[700px] max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Editar Fases — {phase.name}</h2>
+          <h2 className="text-lg font-bold">Editar Programa — {phase.name}</h2>
           <button onClick={onClose} className="text-brand-muted hover:text-white text-lg px-2">✕</button>
         </div>
 
         <p className="text-xs text-brand-muted">
-          {phase.total_weeks} semanas · Clique numa semana para editar fase, cor e descrição
+          {phase.total_weeks} semanas · Clique numa semana para editar fase e exercícios
         </p>
 
         {/* Timeline */}
         <div className="flex gap-1 overflow-x-auto pb-2">
           {weeks.map((w, i) => {
             const isCurrent = i === currentWeek
-            const isEditing = editingWeek === i || (multiMode && multiSelected.has(i))
+            const isEditing = editingWeek === i
             return (
               <div
                 key={i}
@@ -820,7 +880,6 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
               >
                 <div className="text-[10px] text-brand-muted">Sem {i + 1}</div>
                 <div className="text-[10px] font-bold" style={{ color: w.color }}>{w.phase}</div>
-                {w.desc && <div className="text-[8px] text-brand-muted mt-0.5 truncate">{w.desc}</div>}
                 {isCurrent && (
                   <div className="w-1.5 h-1.5 bg-brand-green rounded-full mx-auto mt-1" style={{ boxShadow: '0 0 6px rgba(164,228,75,0.5)' }} />
                 )}
@@ -829,22 +888,18 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
           })}
         </div>
 
-        {/* Edit panel */}
+        {/* Edit panel for selected week */}
         {editingWeek !== null && (
-          <div className="bg-brand-dark border border-brand-secondary rounded-lg p-4 space-y-3 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">Editando Semana {editingWeek + 1}</span>
-              <button onClick={closeWeekEdit} className="text-brand-muted hover:text-white text-sm px-2">✕</button>
-            </div>
+          <div className="space-y-3">
+            {/* Phase section */}
+            <div className="bg-brand-dark border border-brand-secondary rounded-lg p-4 space-y-3">
+              <span className="text-sm font-semibold">Semana {weekNum} — Fase</span>
 
-            {/* Preset chips */}
-            <div>
-              <label className="block text-[11px] text-brand-muted mb-1.5">Fase</label>
               <div className="flex gap-1.5 flex-wrap">
                 {PHASE_PRESETS.map(p => (
                   <button
                     key={p.name}
-                    onClick={() => pickPreset(p)}
+                    onClick={() => { pickPreset(p); }}
                     className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wide transition-all ${
                       customName === p.name ? 'border border-white scale-105' : 'border border-transparent'
                     }`}
@@ -854,93 +909,92 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Custom name */}
-            <div>
-              <label className="block text-[11px] text-brand-muted mb-1">Ou nome customizado</label>
-              <input
-                type="text"
-                value={customName}
-                onChange={e => setCustomName(e.target.value)}
-                placeholder="Ex: FORÇA MÁXIMA"
-                className="w-full bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
-              />
-            </div>
-
-            {/* Color picker */}
-            <div>
-              <label className="block text-[11px] text-brand-muted mb-1">Cor</label>
               <div className="flex gap-2">
-                {PHASE_COLORS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setSelectedColor(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center ${
-                      selectedColor === c ? 'border-white scale-110' : 'border-transparent'
-                    }`}
-                    style={{ background: c }}
-                  >
-                    {selectedColor === c && <span className="text-white text-[10px]">✓</span>}
-                  </button>
-                ))}
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  placeholder="Nome customizado"
+                  className="flex-1 bg-brand-card border border-brand-secondary rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-green"
+                />
+                <div className="flex gap-1.5 items-center">
+                  {PHASE_COLORS.slice(0, 6).map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setSelectedColor(c)}
+                      className={`w-5 h-5 rounded-full border-2 transition-all ${selectedColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                      style={{ background: c }}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Description */}
-            <div>
-              <label className="block text-[11px] text-brand-muted mb-1">Descrição (opcional)</label>
-              <input
-                type="text"
-                value={desc}
-                onChange={e => setDesc(e.target.value)}
-                placeholder="Ex: Progressão de carga linear"
-                className="w-full bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
-              />
-            </div>
-
-            {/* Multi-week toggle */}
-            <div className="flex items-center gap-2 pt-2 border-t border-brand-secondary">
-              <button
-                onClick={() => setMultiMode(v => !v)}
-                className={`w-9 h-5 rounded-full relative transition-colors ${multiMode ? 'bg-brand-green' : 'bg-brand-secondary'}`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${multiMode ? 'left-[18px]' : 'left-0.5'}`} />
+              <button onClick={applyPhaseEdit} className="text-xs text-brand-green font-semibold hover:underline">
+                Aplicar fase
               </button>
-              <span className="text-[11px] text-brand-muted">Aplicar a múltiplas semanas</span>
             </div>
 
-            {multiMode && (
-              <div className="flex gap-1 flex-wrap">
-                {weeks.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      if (i === editingWeek) return
-                      setMultiSelected(prev => {
-                        const next = new Set(prev)
-                        next.has(i) ? next.delete(i) : next.add(i)
-                        return next
-                      })
-                    }}
-                    className={`w-8 h-8 rounded-lg text-[11px] font-semibold transition-all ${
-                      multiSelected.has(i)
-                        ? 'bg-brand-green text-brand-dark'
-                        : 'bg-brand-secondary text-brand-muted'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+            {/* Exercises section */}
+            {allExercises.length > 0 && (
+              <div className="bg-brand-dark border border-brand-secondary rounded-lg p-4 space-y-2">
+                <span className="text-sm font-semibold">Semana {weekNum} — Exercícios</span>
+
+                <div className="space-y-1.5">
+                  {(() => {
+                    let lastPlan = ''
+                    return allExercises.map(({ pe, ex, planName }) => {
+                      const cfg = exConfigs[`${pe.id}-${weekNum}`] || { sets: 3, repsMin: 8, repsMax: 12, weight: 0 }
+                      const showPlanHeader = planName !== lastPlan
+                      lastPlan = planName
+                      return (
+                        <div key={pe.id}>
+                          {showPlanHeader && (
+                            <p className="text-[10px] text-brand-green font-semibold mt-2 mb-1 uppercase tracking-wide">{planName}</p>
+                          )}
+                          <div className="flex items-center gap-2 bg-brand-card/50 rounded-lg px-3 py-2">
+                            <span className="text-xs text-white truncate flex-1 min-w-0">{ex?.name || '???'}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <input
+                                type="number" inputMode="numeric" min="1" max="20"
+                                value={cfg.sets}
+                                onChange={e => updateExConfig(pe.id, weekNum, 'sets', e.target.value)}
+                                className="w-10 bg-brand-dark border border-brand-secondary rounded px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                                title="Séries"
+                              />
+                              <span className="text-[10px] text-brand-muted">×</span>
+                              <input
+                                type="number" inputMode="numeric" min="1" max="50"
+                                value={cfg.repsMin}
+                                onChange={e => updateExConfig(pe.id, weekNum, 'repsMin', e.target.value)}
+                                className="w-10 bg-brand-dark border border-brand-secondary rounded px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                                title="Reps mín"
+                              />
+                              <span className="text-[10px] text-brand-muted">–</span>
+                              <input
+                                type="number" inputMode="numeric" min="1" max="50"
+                                value={cfg.repsMax}
+                                onChange={e => updateExConfig(pe.id, weekNum, 'repsMax', e.target.value)}
+                                className="w-10 bg-brand-dark border border-brand-secondary rounded px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                                title="Reps máx"
+                              />
+                              <span className="text-[10px] text-brand-muted ml-1">kg</span>
+                              <input
+                                type="number" inputMode="decimal" min="0" step="0.5"
+                                value={cfg.weight}
+                                onChange={e => updateExConfig(pe.id, weekNum, 'weight', e.target.value)}
+                                className="w-12 bg-brand-dark border border-brand-secondary rounded px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                                title="Peso sugerido"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
               </div>
             )}
-
-            <button
-              onClick={saveWeekEdit}
-              className="w-full bg-brand-green text-brand-dark py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
-              Aplicar
-            </button>
           </div>
         )}
 
@@ -954,7 +1008,7 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
             disabled={saving}
             className="flex-1 bg-brand-green text-brand-dark py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
           >
-            {saving ? 'Salvando...' : 'Salvar Fases'}
+            {saving ? 'Salvando...' : 'Salvar Tudo'}
           </button>
         </div>
       </div>
