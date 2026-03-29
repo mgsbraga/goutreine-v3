@@ -5,7 +5,7 @@ import StudentLayout from '../StudentLayout'
 import { store } from '../../../shared/constants/store'
 import { Chart } from '../../../lib/chart'
 import { getActivePhase, getExerciseName } from '../../../shared/utils/phase-helpers'
-import { getMuscleGroupName } from '../../../shared/utils/muscle-groups'
+import { getMuscleGroupName, getExerciseActivations, exerciseHasMuscleGroup } from '../../../shared/utils/muscle-groups'
 import { IconTrophy, IconTrendingUp } from '../../../shared/components/icons'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -81,9 +81,13 @@ function getVolumeByMuscleGroup(studentId, days) {
   for (const log of logs) {
     const ex = store.exercises.find(e => e.id === log.exercise_id)
     if (!ex) continue
-    const gid = ex.muscle_group_id
     const vol = (log.weight_kg || 0) * (log.reps_done || 0)
-    volumeMap[gid] = (volumeMap[gid] || 0) + vol
+    // Distribute volume proportionally across activated muscle groups
+    const activations = getExerciseActivations(ex)
+    for (const a of activations) {
+      const proportionalVol = vol * (a.pct / 100)
+      volumeMap[a.group_id] = (volumeMap[a.group_id] || 0) + proportionalVol
+    }
   }
 
   const entries = Object.entries(volumeMap)
@@ -172,22 +176,26 @@ function getVolumeByGroupDetailed(studentId, days) {
     for (const log of logs) {
       const ex = store.exercises.find(e => e.id === log.exercise_id)
       if (!ex) continue
-      const gid = ex.muscle_group_id
-      if (!groups[gid]) {
-        groups[gid] = {
-          groupName: getMuscleGroupName(gid),
-          groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B',
-          totalVolume: 0,
-          exercises: {},
-        }
-      }
-      if (!groups[gid].exercises[ex.id]) {
-        groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
-      }
       const vol = (log.weight_kg || 0) * (log.reps_done || 0)
-      groups[gid].totalVolume += vol
-      groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
-        (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + vol
+      const activations = getExerciseActivations(ex)
+      for (const a of activations) {
+        const gid = a.group_id
+        const proportionalVol = vol * (a.pct / 100)
+        if (!groups[gid]) {
+          groups[gid] = {
+            groupName: getMuscleGroupName(gid),
+            groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B',
+            totalVolume: 0,
+            exercises: {},
+          }
+        }
+        if (!groups[gid].exercises[ex.id]) {
+          groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
+        }
+        groups[gid].totalVolume += proportionalVol
+        groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
+          (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + proportionalVol
+      }
     }
   }
 
@@ -324,7 +332,7 @@ export default function ProgressoPage() {
   // Group exercises by muscle group for the selector
   const exercisesByGroup = store.muscle_groups.map(group => ({
     group,
-    exercises: store.exercises.filter(e => e.muscle_group_id === group.id),
+    exercises: store.exercises.filter(e => exerciseHasMuscleGroup(e, group.id)),
   })).filter(g => g.exercises.length > 0)
 
   // Default to first exercise that has data

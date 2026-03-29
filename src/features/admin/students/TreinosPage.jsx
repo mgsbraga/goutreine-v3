@@ -1671,17 +1671,21 @@ function getVolumeByGroupDetailed(studentId, days) {
     for (const log of logs) {
       const ex = store.exercises.find(e => e.id === log.exercise_id)
       if (!ex) continue
-      const gid = ex.muscle_group_id
-      if (!groups[gid]) {
-        groups[gid] = { groupName: getMuscleGroupName(gid), groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B', totalVolume: 0, exercises: {} }
-      }
-      if (!groups[gid].exercises[ex.id]) {
-        groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
-      }
       const vol = (log.weight_kg || 0) * (log.reps_done || 0)
-      groups[gid].totalVolume += vol
-      groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
-        (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + vol
+      const activations = getExerciseActivations(ex)
+      for (const a of activations) {
+        const gid = a.group_id
+        const proportionalVol = vol * (a.pct / 100)
+        if (!groups[gid]) {
+          groups[gid] = { groupName: getMuscleGroupName(gid), groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B', totalVolume: 0, exercises: {} }
+        }
+        if (!groups[gid].exercises[ex.id]) {
+          groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
+        }
+        groups[gid].totalVolume += proportionalVol
+        groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
+          (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + proportionalVol
+      }
     }
   }
   return Object.entries(groups)
@@ -1827,8 +1831,11 @@ function StudentProgressContent({ studentId }) {
     for (const log of logs) {
       const ex = store.exercises.find(e => e.id === log.exercise_id)
       if (!ex) continue
-      const gid = ex.muscle_group_id
-      volumeMap[gid] = (volumeMap[gid] || 0) + (log.weight_kg || 0) * (log.reps_done || 0)
+      const vol = (log.weight_kg || 0) * (log.reps_done || 0)
+      const activations = getExerciseActivations(ex)
+      for (const a of activations) {
+        volumeMap[a.group_id] = (volumeMap[a.group_id] || 0) + vol * (a.pct / 100)
+      }
     }
     const entries = Object.entries(volumeMap).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
     return {
@@ -1869,7 +1876,7 @@ function StudentProgressContent({ studentId }) {
   // Exercise selector grouped by muscle group
   const exercisesByGroup = store.muscle_groups.map(group => ({
     group,
-    exercises: store.exercises.filter(e => e.muscle_group_id === group.id),
+    exercises: store.exercises.filter(e => exerciseHasMuscleGroup(e, group.id)),
   })).filter(g => g.exercises.length > 0)
 
   // ── Chart builders ──
