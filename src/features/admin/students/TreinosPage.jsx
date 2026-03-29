@@ -983,7 +983,7 @@ function StudentTreinosContent({ studentId }) {
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
           >
-            + Nova Periodização
+            Nova Periodização
           </button>
         </div>
       </div>
