@@ -107,7 +107,7 @@ export function Router() {
         {(route === 'admin' || route === 'admin/dashboard') && <AdminDashboard />}
         {route === 'admin/alunos' && <AdminStudentsPage params={params} />}
         {route === 'admin/treinos' && <AdminTreinosPage params={params} />}
-        {route === 'admin/exercicios' && <AdminExercisesPage />}
+        {route === 'admin/exercicios' && <AdminTemplatesPage />}
         {route === 'admin/templates' && <AdminTemplatesPage />}
       </Suspense>
     </>

@@ -6,6 +6,7 @@ import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-s
 import { getMuscleGroupColor, getMuscleGroupName } from '../../../shared/utils/muscle-groups'
 import { IconPlus } from '../../../shared/components/icons'
 import { SchemesContent } from '../schemes/SchemesPage'
+import { ExercisesContent } from '../exercises/ExercisesPage'
 import AdminLayout from '../AdminLayout'
 
 function AddTemplateModal({ onSave, onClose }) {
@@ -650,12 +651,12 @@ function TemplatesContent({ onOpenModal }) {
   if (templates.length === 0) {
     return (
       <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
-        <p className="text-brand-muted mb-4">Nenhum template criado ainda.</p>
+        <p className="text-brand-muted mb-4">Nenhum treino base criado ainda.</p>
         <button
           onClick={onOpenModal}
           className="bg-brand-green text-brand-dark px-5 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
         >
-          Criar Primeiro Template
+          Criar Primeiro Treino Base
         </button>
       </div>
     )
@@ -670,8 +671,14 @@ function TemplatesContent({ onOpenModal }) {
   )
 }
 
+const TABS = [
+  { key: 'treinos', label: 'Treinos Base' },
+  { key: 'periodizacoes', label: 'Periodizações' },
+  { key: 'exercicios', label: 'Exercícios' },
+]
+
 export default function TemplatesPage() {
-  const [tab, setTab] = useState('templates')
+  const [tab, setTab] = useState('treinos')
   const [modalOpen, setModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -686,50 +693,46 @@ export default function TemplatesPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Periodização</h1>
-            <p className="text-brand-muted text-sm mt-1">Templates e esquemas de periodização</p>
+            <h1 className="text-2xl font-bold">Bibliotecas</h1>
+            <p className="text-brand-muted text-sm mt-1">Treinos base, periodizações e exercícios</p>
           </div>
-          {tab === 'templates' && (
+          {tab === 'treinos' && (
             <button
               onClick={() => setModalOpen(true)}
               className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors shrink-0"
             >
               <IconPlus />
-              Novo Template
+              Novo Treino Base
             </button>
           )}
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-brand-card border border-brand-secondary rounded-lg p-1">
-          <button
-            onClick={() => setTab('templates')}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-              tab === 'templates'
-                ? 'bg-brand-green text-brand-dark font-semibold'
-                : 'text-brand-muted hover:text-white'
-            }`}
-          >
-            Templates
-          </button>
-          <button
-            onClick={() => setTab('esquemas')}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-              tab === 'esquemas'
-                ? 'bg-brand-green text-brand-dark font-semibold'
-                : 'text-brand-muted hover:text-white'
-            }`}
-          >
-            Esquemas
-          </button>
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                tab === t.key
+                  ? 'bg-brand-green text-brand-dark font-semibold'
+                  : 'text-brand-muted hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Tab content */}
-        {tab === 'templates' && (
+        {tab === 'treinos' && (
           <TemplatesContent key={refreshKey} onOpenModal={() => setModalOpen(true)} />
         )}
-        {tab === 'esquemas' && (
+        {tab === 'periodizacoes' && (
           <SchemesContent />
+        )}
+        {tab === 'exercicios' && (
+          <ExercisesContent />
         )}
       </div>
 
