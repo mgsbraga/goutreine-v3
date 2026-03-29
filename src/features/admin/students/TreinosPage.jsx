@@ -977,13 +977,13 @@ function StudentTreinosContent({ studentId }) {
             onClick={() => setTemplateModalOpen(true)}
             className="flex items-center gap-2 bg-brand-card border border-brand-secondary text-white px-4 py-2 rounded-lg text-sm font-medium hover:border-brand-green transition-colors"
           >
-            De Template
+            Aplicar Template
           </button>
           <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
           >
-            + Nova Fase
+            + Nova Periodização
           </button>
         </div>
       </div>
