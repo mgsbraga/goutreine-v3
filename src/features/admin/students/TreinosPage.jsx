@@ -3,7 +3,7 @@ import { sb } from '../../../lib/supabase'
 import { store } from '../../../shared/constants/store'
 import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
-import { getExerciseName, getActivePhase, getCurrentWeekForPhase } from '../../../shared/utils/phase-helpers'
+import { getExerciseName, getActivePhase, getCurrentWeekForPhase, getSchemeForPhase } from '../../../shared/utils/phase-helpers'
 import { getMuscleGroupName, getMuscleGroupColor } from '../../../shared/utils/muscle-groups'
 import { Chart } from '../../../lib/chart'
 import AdminLayout from '../AdminLayout'
@@ -642,12 +642,280 @@ function SaveAsTemplateModal({ phase, onClose }) {
   )
 }
 
+// ─── Phase presets for week editor ───────────────────────────────────────────
+const PHASE_PRESETS = [
+  { name: 'BASE', color: '#3B82F6' },
+  { name: 'INTENSIF.', color: '#22C55E' },
+  { name: 'CHOQUE', color: '#F97316' },
+  { name: 'CHOQUE+', color: '#EF4444' },
+  { name: 'RECUPERAÇÃO', color: '#6B7280' },
+  { name: 'DELOAD', color: '#A855F7' },
+  { name: 'PICO', color: '#FBBF24' },
+]
+
+const PHASE_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#EF4444', '#6B7280', '#A855F7', '#FBBF24', '#EC4899']
+
+function PhaseWeekEditor({ phase, onClose, onSave }) {
+  const scheme = getSchemeForPhase(phase)
+  const currentWeek = getCurrentWeekForPhase(phase) - 1 // 0-indexed
+
+  const [weeks, setWeeks] = useState(() => {
+    const total = phase.total_weeks || 8
+    if (scheme?.configs) {
+      return scheme.configs.slice(0, total).map(c => ({
+        phase: c.phase || 'BASE',
+        color: c.phase_color || '#3B82F6',
+        desc: c.description || '',
+      }))
+    }
+    return Array.from({ length: total }, () => ({ phase: 'BASE', color: '#3B82F6', desc: '' }))
+  })
+
+  const [editingWeek, setEditingWeek] = useState(null)
+  const [selectedColor, setSelectedColor] = useState('#3B82F6')
+  const [customName, setCustomName] = useState('')
+  const [desc, setDesc] = useState('')
+  const [multiMode, setMultiMode] = useState(false)
+  const [multiSelected, setMultiSelected] = useState(new Set())
+  const [saving, setSaving] = useState(false)
+
+  function clickWeek(i) {
+    if (multiMode && editingWeek !== null) {
+      if (i === editingWeek) return
+      setMultiSelected(prev => {
+        const next = new Set(prev)
+        next.has(i) ? next.delete(i) : next.add(i)
+        return next
+      })
+      return
+    }
+    setEditingWeek(i)
+    setSelectedColor(weeks[i].color)
+    setCustomName(weeks[i].phase)
+    setDesc(weeks[i].desc)
+    setMultiSelected(new Set([i]))
+  }
+
+  function pickPreset(preset) {
+    setCustomName(preset.name)
+    setSelectedColor(preset.color)
+  }
+
+  function saveWeekEdit() {
+    const name = customName || 'BASE'
+    const targets = multiMode ? [...multiSelected] : (editingWeek !== null ? [editingWeek] : [])
+    setWeeks(prev => {
+      const next = [...prev]
+      targets.forEach(i => { next[i] = { phase: name, color: selectedColor, desc } })
+      return next
+    })
+    setEditingWeek(null)
+    setMultiMode(false)
+    setMultiSelected(new Set())
+  }
+
+  function closeWeekEdit() {
+    setEditingWeek(null)
+    setMultiMode(false)
+    setMultiSelected(new Set())
+  }
+
+  async function handleSaveAll() {
+    setSaving(true)
+    try {
+      // Build a custom scheme config from the edited weeks
+      const configs = weeks.map((w, i) => ({
+        week: i + 1,
+        phase: w.phase,
+        phase_color: w.color,
+        description: w.desc,
+      }))
+      await onSave(configs)
+      onClose()
+    } catch (err) {
+      alert('Erro ao salvar: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-[640px] max-h-[90vh] overflow-y-auto p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">Editar Fases — {phase.name}</h2>
+          <button onClick={onClose} className="text-brand-muted hover:text-white text-lg px-2">✕</button>
+        </div>
+
+        <p className="text-xs text-brand-muted">
+          {phase.total_weeks} semanas · Clique numa semana para editar fase, cor e descrição
+        </p>
+
+        {/* Timeline */}
+        <div className="flex gap-1 overflow-x-auto pb-2">
+          {weeks.map((w, i) => {
+            const isCurrent = i === currentWeek
+            const isEditing = editingWeek === i || (multiMode && multiSelected.has(i))
+            return (
+              <div
+                key={i}
+                onClick={() => clickWeek(i)}
+                className={`flex-1 min-w-[60px] text-center py-2.5 px-1 rounded-lg cursor-pointer border-2 transition-all ${
+                  isEditing ? 'border-brand-green' : 'border-transparent hover:border-brand-green/30'
+                }`}
+                style={{ background: w.color + '15' }}
+              >
+                <div className="text-[10px] text-brand-muted">Sem {i + 1}</div>
+                <div className="text-[10px] font-bold" style={{ color: w.color }}>{w.phase}</div>
+                {w.desc && <div className="text-[8px] text-brand-muted mt-0.5 truncate">{w.desc}</div>}
+                {isCurrent && (
+                  <div className="w-1.5 h-1.5 bg-brand-green rounded-full mx-auto mt-1" style={{ boxShadow: '0 0 6px rgba(164,228,75,0.5)' }} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Edit panel */}
+        {editingWeek !== null && (
+          <div className="bg-brand-dark border border-brand-secondary rounded-lg p-4 space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Editando Semana {editingWeek + 1}</span>
+              <button onClick={closeWeekEdit} className="text-brand-muted hover:text-white text-sm px-2">✕</button>
+            </div>
+
+            {/* Preset chips */}
+            <div>
+              <label className="block text-[11px] text-brand-muted mb-1.5">Fase</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {PHASE_PRESETS.map(p => (
+                  <button
+                    key={p.name}
+                    onClick={() => pickPreset(p)}
+                    className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wide transition-all ${
+                      customName === p.name ? 'border border-white scale-105' : 'border border-transparent'
+                    }`}
+                    style={{ background: p.color + '20', color: p.color }}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom name */}
+            <div>
+              <label className="block text-[11px] text-brand-muted mb-1">Ou nome customizado</label>
+              <input
+                type="text"
+                value={customName}
+                onChange={e => setCustomName(e.target.value)}
+                placeholder="Ex: FORÇA MÁXIMA"
+                className="w-full bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
+              />
+            </div>
+
+            {/* Color picker */}
+            <div>
+              <label className="block text-[11px] text-brand-muted mb-1">Cor</label>
+              <div className="flex gap-2">
+                {PHASE_COLORS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setSelectedColor(c)}
+                    className={`w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center ${
+                      selectedColor === c ? 'border-white scale-110' : 'border-transparent'
+                    }`}
+                    style={{ background: c }}
+                  >
+                    {selectedColor === c && <span className="text-white text-[10px]">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-[11px] text-brand-muted mb-1">Descrição (opcional)</label>
+              <input
+                type="text"
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+                placeholder="Ex: Progressão de carga linear"
+                className="w-full bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
+              />
+            </div>
+
+            {/* Multi-week toggle */}
+            <div className="flex items-center gap-2 pt-2 border-t border-brand-secondary">
+              <button
+                onClick={() => setMultiMode(v => !v)}
+                className={`w-9 h-5 rounded-full relative transition-colors ${multiMode ? 'bg-brand-green' : 'bg-brand-secondary'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${multiMode ? 'left-[18px]' : 'left-0.5'}`} />
+              </button>
+              <span className="text-[11px] text-brand-muted">Aplicar a múltiplas semanas</span>
+            </div>
+
+            {multiMode && (
+              <div className="flex gap-1 flex-wrap">
+                {weeks.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (i === editingWeek) return
+                      setMultiSelected(prev => {
+                        const next = new Set(prev)
+                        next.has(i) ? next.delete(i) : next.add(i)
+                        return next
+                      })
+                    }}
+                    className={`w-8 h-8 rounded-lg text-[11px] font-semibold transition-all ${
+                      multiSelected.has(i)
+                        ? 'bg-brand-green text-brand-dark'
+                        : 'bg-brand-secondary text-brand-muted'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={saveWeekEdit}
+              className="w-full bg-brand-green text-brand-dark py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Aplicar
+            </button>
+          </div>
+        )}
+
+        {/* Footer actions */}
+        <div className="flex gap-3 pt-2 border-t border-brand-secondary">
+          <button onClick={onClose} className="flex-1 bg-brand-secondary text-white py-2 rounded-lg text-sm font-medium">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="flex-1 bg-brand-green text-brand-dark py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
+          >
+            {saving ? 'Salvando...' : 'Salvar Fases'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PhaseCard({ phase, onStatusChange, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showAddPlan, setShowAddPlan] = useState(false)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [showWeekEditor, setShowWeekEditor] = useState(false)
 
   const plans = store.training_plans.filter((p) => p.phase_id === phase.id)
 
@@ -804,6 +1072,14 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute top-[calc(100%+6px)] right-0 z-50 bg-[#333] border border-[#4a4a4a] rounded-xl min-w-[200px] p-1 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
                     <button
+                      onClick={() => { setMenuOpen(false); setShowWeekEditor(true) }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
+                    >
+                      <span className="text-xs opacity-70">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      </span> Editar Fases
+                    </button>
+                    <button
                       onClick={() => { setMenuOpen(false); setShowCopyModal(true) }}
                       className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
                     >
@@ -866,6 +1142,28 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
       )}
       {showTemplateModal && (
         <SaveAsTemplateModal phase={phase} onClose={() => setShowTemplateModal(false)} />
+      )}
+      {showWeekEditor && (
+        <PhaseWeekEditor
+          phase={phase}
+          onClose={() => setShowWeekEditor(false)}
+          onSave={async (configs) => {
+            // Save the custom scheme configs to the phase
+            // Find or create a custom scheme entry in PERIODIZATION_SCHEMES
+            const customScheme = {
+              week_configs: configs,
+            }
+            // Update phase with the custom week phase labels via Supabase
+            if (sb) {
+              await sb.from('training_phases').update({
+                week_phase_labels: JSON.stringify(configs),
+              }).eq('id', phase.id)
+            }
+            // Update local store
+            phase.week_phase_labels = JSON.stringify(configs)
+            onRefresh()
+          }}
+        />
       )}
     </div>
   )

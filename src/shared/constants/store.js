@@ -15,4 +15,5 @@ export const store = {
   week_configs: [],
   workout_sessions: [],
   session_logs: [],
+  custom_schemes: [],
 }
