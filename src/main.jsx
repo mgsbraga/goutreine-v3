@@ -18,30 +18,27 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       console.log('[SW] Registrado:', reg.scope)
-
-      // Force check for updates every time the app loads
+      // Force check for SW updates on every load
       reg.update().catch(() => {})
-
-      // Check for updates — auto-activate new SW
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // Auto-activate new version without asking
-              newWorker.postMessage('skipWaiting')
-              window.location.reload()
-            }
-          })
-        }
-      })
     }).catch((err) => {
       console.error('[SW] Erro no registro:', err)
     })
   })
 
-  // Listen for SW controller change (when new SW takes over)
+  // When the new SW sends SW_UPDATED message, reload to get fresh code
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_UPDATED') {
+      console.log('[SW] Nova versão detectada:', event.data.version, '— recarregando')
+      window.location.reload()
+    }
+  })
+
+  // Also reload when controller changes (new SW takes over)
+  let refreshing = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    console.log('[SW] Nova versão ativada')
+    if (refreshing) return
+    refreshing = true
+    console.log('[SW] Controller mudou — recarregando')
+    window.location.reload()
   })
 }
