@@ -83,8 +83,8 @@ export default function Dashboard() {
               route="admin/exercicios"
             />
             <QuickLink
-              label="Templates de Treino"
-              description="Crie e gerencie periodizações reutilizáveis"
+              label="Treinos Base"
+              description="Crie e gerencie treinos base reutilizáveis"
               route="admin/templates"
             />
           </div>

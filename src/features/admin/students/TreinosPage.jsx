@@ -655,7 +655,7 @@ function SaveAsTemplateModal({ phase, onClose }) {
       await programsService.savePhaseAsTemplate(phase.id, { name: name.trim(), description: description.trim() })
       setDone(true)
     } catch (err) {
-      alert('Erro ao salvar template: ' + (err.message || err))
+      alert('Erro ao salvar treino base: ' + (err.message || err))
     } finally {
       setSaving(false)
     }
@@ -665,7 +665,7 @@ function SaveAsTemplateModal({ phase, onClose }) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
         <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 text-center space-y-4">
-          <p className="text-brand-green font-semibold">Template "{name}" criado com sucesso!</p>
+          <p className="text-brand-green font-semibold">Treino Base "{name}" criado com sucesso!</p>
           <button onClick={onClose} className="bg-brand-green text-brand-dark px-6 py-2 rounded-lg text-sm font-semibold">Fechar</button>
         </div>
       </div>
@@ -675,10 +675,10 @@ function SaveAsTemplateModal({ phase, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-bold">Salvar como Template</h2>
+        <h2 className="text-lg font-bold">Salvar como Treino Base</h2>
         <form onSubmit={handleSave} className="space-y-3">
           <div>
-            <label className="block text-sm text-brand-muted mb-1">Nome do Template</label>
+            <label className="block text-sm text-brand-muted mb-1">Nome do Treino Base</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
           </div>
           <div>
@@ -687,7 +687,7 @@ function SaveAsTemplateModal({ phase, onClose }) {
           </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
-            <button type="submit" disabled={saving || !name.trim()} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar Template'}</button>
+            <button type="submit" disabled={saving || !name.trim()} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar Treino Base'}</button>
           </div>
         </form>
       </div>
@@ -1398,7 +1398,7 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
                       onClick={() => { setMenuOpen(false); setShowTemplateModal(true) }}
                       className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
                     >
-                      <span className="text-xs opacity-70">📋</span> Salvar como template
+                      <span className="text-xs opacity-70">📋</span> Salvar como treino base
                     </button>
                     <div className="h-px bg-[#4a4a4a] mx-2 my-1" />
                     <button
@@ -1503,7 +1503,7 @@ function ApplyFromTemplateModal({ studentId, onClose, onApplied }) {
       onApplied()
       onClose()
     } catch (err) {
-      alert('Erro ao aplicar template: ' + (err.message || err))
+      alert('Erro ao aplicar treino base: ' + (err.message || err))
     } finally {
       setSaving(false)
     }
@@ -1512,13 +1512,13 @@ function ApplyFromTemplateModal({ studentId, onClose, onApplied }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-bold">Aplicar Template</h2>
+        <h2 className="text-lg font-bold">Aplicar Treino Base</h2>
 
         <div>
-          <label className="block text-sm text-brand-muted mb-1">Template</label>
+          <label className="block text-sm text-brand-muted mb-1">Treino Base</label>
           <div className="max-h-48 overflow-y-auto space-y-1">
             {templates.length === 0 ? (
-              <p className="text-xs text-brand-muted py-4 text-center">Nenhum template disponível.</p>
+              <p className="text-xs text-brand-muted py-4 text-center">Nenhum treino base disponível.</p>
             ) : templates.map(t => {
               const plans = store.template_plans.filter(p => p.template_id === t.id)
               const isSelected = selectedTemplate?.id === t.id

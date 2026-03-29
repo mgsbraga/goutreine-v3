@@ -39,7 +39,7 @@ function AddTemplateModal({ onSave, onClose }) {
       })
       onClose()
     } catch (err) {
-      setError(err.message || 'Erro ao criar template.')
+      setError(err.message || 'Erro ao criar treino base.')
     } finally {
       setSaving(false)
     }
@@ -48,7 +48,7 @@ function AddTemplateModal({ onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
-        <h2 className="text-lg font-bold">Novo Template</h2>
+        <h2 className="text-lg font-bold">Novo Treino Base</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-brand-muted mb-1">Nome</label>
@@ -59,9 +59,9 @@ function AddTemplateModal({ onSave, onClose }) {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição opcional..." rows={3} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green resize-none" />
           </div>
           <div>
-            <label className="block text-sm text-brand-muted mb-1">Esquema de Periodização</label>
+            <label className="block text-sm text-brand-muted mb-1">Periodização</label>
             <select value={schemeId} onChange={(e) => handleSchemeChange(e.target.value)} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green">
-              <option value="">Sem esquema pré-definido</option>
+              <option value="">Sem periodização pré-definida</option>
               {PERIODIZATION_SCHEMES.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} ({s.total_weeks} sem.)</option>
               ))}
@@ -74,7 +74,7 @@ function AddTemplateModal({ onSave, onClose }) {
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Criando...' : 'Criar Template'}</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Criando...' : 'Criar Treino Base'}</button>
           </div>
         </form>
       </div>
@@ -480,7 +480,7 @@ function ApplyTemplateModal({ template, onClose, onApplied }) {
       onApplied()
       onClose()
     } catch (err) {
-      alert('Erro ao aplicar template: ' + (err.message || err))
+      alert('Erro ao aplicar treino base: ' + (err.message || err))
     } finally {
       setSaving(false)
     }
@@ -489,7 +489,7 @@ function ApplyTemplateModal({ template, onClose, onApplied }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-bold">Aplicar "{template.name}"</h2>
+        <h2 className="text-lg font-bold">Aplicar Treino Base "{template.name}"</h2>
 
         <div>
           <label className="block text-sm text-brand-muted mb-1">Data de início</label>
@@ -566,7 +566,7 @@ function TemplateCard({ template, onDelete, onRefresh }) {
   }
 
   async function handleDelete() {
-    if (!confirm(`Excluir o template "${template.name}"?`)) return
+    if (!confirm(`Excluir o treino base "${template.name}"?`)) return
     setDeleting(true)
     try {
       await onDelete(template.id)

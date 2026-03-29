@@ -136,12 +136,12 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold">{scheme ? 'Editar Esquema' : 'Novo Esquema'}</h3>
+          <h3 className="text-base font-semibold">{scheme ? 'Editar Periodização' : 'Nova Periodização'}</h3>
           <button onClick={onClose} className="text-brand-muted hover:text-white text-lg px-2">✕</button>
         </div>
 
         {/* Name */}
-        <label className="block text-[11px] text-brand-muted mb-1">Nome do esquema</label>
+        <label className="block text-[11px] text-brand-muted mb-1">Nome da periodização</label>
         <input
           type="text"
           value={name}
@@ -246,7 +246,7 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
             disabled={saving || !name.trim()}
             className="flex-1 bg-brand-green text-brand-dark py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
           >
-            {saving ? 'Salvando...' : 'Salvar Esquema'}
+            {saving ? 'Salvando...' : 'Salvar Periodização'}
           </button>
         </div>
       </div>
@@ -292,7 +292,7 @@ export function SchemesContent() {
 
   async function handleDelete(scheme) {
     if (scheme.type !== 'custom') return
-    if (!confirm(`Excluir o esquema "${scheme.name}"?`)) return
+    if (!confirm(`Excluir a periodização "${scheme.name}"?`)) return
     await schemesService.deleteScheme(scheme.id)
     await loadSchemes()
   }
@@ -314,13 +314,13 @@ export function SchemesContent() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-brand-muted text-sm">Esquemas reutilizáveis para aplicar ao criar periodizações</p>
+        <p className="text-brand-muted text-sm">Periodizações reutilizáveis para aplicar ao criar treinos</p>
         <button
           onClick={() => { setEditingScheme(null); setBuilderOpen(true) }}
           className="flex items-center gap-2 bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity shrink-0"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          Novo Esquema
+          Nova Periodização
         </button>
       </div>
 
@@ -349,7 +349,7 @@ export function SchemesContent() {
       {filtered.length === 0 ? (
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-10 text-center">
           <svg className="mx-auto mb-3 opacity-40" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
-          <p className="text-brand-muted text-sm">Nenhum esquema encontrado</p>
+          <p className="text-brand-muted text-sm">Nenhuma periodização encontrada</p>
         </div>
       ) : (
         <div className="space-y-2">
