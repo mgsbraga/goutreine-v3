@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { store } from '../../../shared/constants/store'
 import * as templatesService from '../../../services/templates'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
+import { getMuscleGroupColor, getMuscleGroupName } from '../../../shared/utils/muscle-groups'
 import { IconPlus } from '../../../shared/components/icons'
 import AdminLayout from '../AdminLayout'
 
@@ -13,7 +14,6 @@ function AddTemplateModal({ onSave, onClose }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  // Sync total_weeks when a scheme is selected
   function handleSchemeChange(val) {
     setSchemeId(val)
     if (val) {
@@ -46,76 +46,32 @@ function AddTemplateModal({ onSave, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
         <h2 className="text-lg font-bold">Novo Template</h2>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-brand-muted mb-1">Nome</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Hipertrofia Iniciante"
-              autoFocus
-              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
-            />
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Hipertrofia Iniciante" autoFocus className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
           </div>
-
           <div>
             <label className="block text-sm text-brand-muted mb-1">Descrição</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descrição opcional..."
-              rows={3}
-              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green resize-none"
-            />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição opcional..." rows={3} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green resize-none" />
           </div>
-
           <div>
             <label className="block text-sm text-brand-muted mb-1">Esquema de Periodização</label>
-            <select
-              value={schemeId}
-              onChange={(e) => handleSchemeChange(e.target.value)}
-              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
-            >
+            <select value={schemeId} onChange={(e) => handleSchemeChange(e.target.value)} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green">
               <option value="">Sem esquema pré-definido</option>
               {PERIODIZATION_SCHEMES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.total_weeks} sem.)
-                </option>
+                <option key={s.id} value={s.id}>{s.name} ({s.total_weeks} sem.)</option>
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm text-brand-muted mb-1">Total de Semanas</label>
-            <input
-              type="number"
-              value={totalWeeks}
-              onChange={(e) => setTotalWeeks(e.target.value)}
-              min={1}
-              max={24}
-              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
-            />
+            <input type="number" value={totalWeeks} onChange={(e) => setTotalWeeks(e.target.value)} min={1} max={24} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
           </div>
-
           {error && <p className="text-red-400 text-sm">{error}</p>}
-
           <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:bg-opacity-80 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-60"
-            >
-              {saving ? 'Criando...' : 'Criar Template'}
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Criando...' : 'Criar Template'}</button>
           </div>
         </form>
       </div>
@@ -123,9 +79,337 @@ function AddTemplateModal({ onSave, onClose }) {
   )
 }
 
-function TemplateCard({ template, onDelete }) {
+function AddPlanModal({ onSave, onClose }) {
+  const [name, setName] = useState('')
+  const [dayLabel, setDayLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      await onSave({ name: name.trim(), dayLabel: dayLabel.trim() })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Novo Treino</h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Nome</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Treino A" autoFocus className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+          </div>
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Rótulo do dia (opcional)</label>
+            <input type="text" value={dayLabel} onChange={e => setDayLabel(e.target.value)} placeholder="Ex: Segunda e Quinta" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+            <button type="submit" disabled={saving || !name.trim()} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Criando...' : 'Criar Treino'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function AddExerciseModal({ templatePlanId, totalWeeks, onSave, onClose }) {
+  const [selectedGroup, setSelectedGroup] = useState('')
+  const [selectedExercise, setSelectedExercise] = useState('')
+  const [restSeconds, setRestSeconds] = useState(90)
+  const [sets, setSets] = useState(3)
+  const [repsMin, setRepsMin] = useState(8)
+  const [repsMax, setRepsMax] = useState(12)
+  const [suggestedWeight, setSuggestedWeight] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const groups = store.muscle_groups.filter(g => store.exercises.some(e => e.muscle_group_id === g.id))
+  const filteredExercises = selectedGroup ? store.exercises.filter(e => e.muscle_group_id === parseInt(selectedGroup)) : []
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!selectedExercise) return
+    setSaving(true)
+    try {
+      await onSave({
+        exerciseId: parseInt(selectedExercise),
+        restSeconds: Number(restSeconds) || 90,
+        sets: Number(sets) || 3,
+        repsMin: Number(repsMin) || 8,
+        repsMax: Number(repsMax) || 12,
+        suggestedWeight: Number(suggestedWeight) || 0,
+      })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Adicionar Exercício</h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Grupamento Muscular</label>
+            <select value={selectedGroup} onChange={e => { setSelectedGroup(e.target.value); setSelectedExercise('') }} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green">
+              <option value="">Selecione o grupamento...</option>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Exercício</label>
+            <select value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)} disabled={!selectedGroup} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green disabled:opacity-40">
+              <option value="">{selectedGroup ? 'Selecione o exercício...' : 'Escolha o grupamento primeiro'}</option>
+              {filteredExercises.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-sm text-brand-muted mb-1">Séries</label>
+              <input type="number" value={sets} onChange={e => setSets(e.target.value)} min={1} max={10} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+            </div>
+            <div>
+              <label className="block text-sm text-brand-muted mb-1">Reps mín</label>
+              <input type="number" value={repsMin} onChange={e => setRepsMin(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+            </div>
+            <div>
+              <label className="block text-sm text-brand-muted mb-1">Reps máx</label>
+              <input type="number" value={repsMax} onChange={e => setRepsMax(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm text-brand-muted mb-1">Carga sugerida (kg)</label>
+              <input type="number" value={suggestedWeight} onChange={e => setSuggestedWeight(e.target.value)} min={0} step={0.5} placeholder="Opcional" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
+            </div>
+            <div>
+              <label className="block text-sm text-brand-muted mb-1">Descanso (seg)</label>
+              <input type="number" value={restSeconds} onChange={e => setRestSeconds(e.target.value)} min={0} max={300} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+            <button type="submit" disabled={saving || !selectedExercise} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Adicionando...' : 'Adicionar'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function TemplatePlanEditor({ plan, template, onRefresh }) {
+  const [showAddExercise, setShowAddExercise] = useState(false)
+  const [removing, setRemoving] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editValues, setEditValues] = useState({ sets: 3, repsMin: 8, repsMax: 12, weight: 0 })
+
+  const exercises = store.template_exercises
+    .filter(te => te.template_plan_id === plan.id)
+    .sort((a, b) => (a.order ?? a.exercise_order ?? 0) - (b.order ?? b.exercise_order ?? 0))
+
+  async function handleAddExercise({ exerciseId, restSeconds, sets, repsMin, repsMax, suggestedWeight }) {
+    const existingCount = exercises.length
+    const te = await templatesService.addTemplateExercise(plan.id, {
+      exerciseId, restSeconds, order: existingCount + 1,
+    })
+    const totalWeeks = template.total_weeks || 8
+    const configs = Array.from({ length: totalWeeks }, (_, i) => ({
+      week: i + 1,
+      sets: sets || 3,
+      reps_min: repsMin || 8,
+      reps_max: repsMax || 12,
+      suggested_weight_kg: suggestedWeight || 0,
+      drop_sets: 0,
+      notes: '',
+    }))
+    await templatesService.bulkUpdateTemplateWeekConfigs(te.id, configs)
+    onRefresh()
+  }
+
+  async function handleRemoveExercise(teId) {
+    setRemoving(teId)
+    try {
+      await templatesService.removeTemplateExercise(teId)
+      onRefresh()
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  async function handleMoveExercise(te, direction) {
+    const sorted = [...exercises]
+    const idx = sorted.findIndex(e => e.id === te.id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= sorted.length) return
+    const other = sorted[swapIdx]
+    const teOrder = te.order ?? te.exercise_order ?? idx + 1
+    const otherOrder = other.order ?? other.exercise_order ?? swapIdx + 1
+    // Update in Supabase
+    const { sb } = await import('../../../lib/supabase')
+    if (sb) {
+      await sb.from('template_exercises').update({ exercise_order: otherOrder }).eq('id', te.id)
+      await sb.from('template_exercises').update({ exercise_order: teOrder }).eq('id', other.id)
+    }
+    te.order = otherOrder; te.exercise_order = otherOrder
+    other.order = teOrder; other.exercise_order = teOrder
+    onRefresh()
+  }
+
+  function startEdit(te) {
+    const wc = store.template_week_configs.find(c => c.template_exercise_id === te.id && c.week === 1)
+    setEditValues({
+      sets: wc?.sets || 3,
+      repsMin: wc?.reps_min || 8,
+      repsMax: wc?.reps_max || 12,
+      weight: wc?.suggested_weight_kg || 0,
+    })
+    setEditingId(te.id)
+  }
+
+  async function saveEdit(te) {
+    const totalWeeks = template.total_weeks || 8
+    const configs = Array.from({ length: totalWeeks }, (_, i) => ({
+      week: i + 1,
+      sets: Number(editValues.sets) || 3,
+      reps_min: Number(editValues.repsMin) || 8,
+      reps_max: Number(editValues.repsMax) || 12,
+      suggested_weight_kg: Number(editValues.weight) || 0,
+      drop_sets: 0,
+      notes: '',
+    }))
+    await templatesService.bulkUpdateTemplateWeekConfigs(te.id, configs)
+    setEditingId(null)
+    onRefresh()
+  }
+
+  async function handleDeletePlan() {
+    if (!confirm(`Excluir o treino "${plan.name}"?`)) return
+    await templatesService.deleteTemplatePlan(plan.id)
+    onRefresh()
+  }
+
+  return (
+    <div className="bg-brand-dark bg-opacity-60 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-white">{plan.name}</span>
+          {plan.day_label && <span className="text-xs text-brand-muted">{plan.day_label}</span>}
+        </div>
+        <button onClick={handleDeletePlan} className="text-xs text-red-400 hover:text-red-300 transition-colors px-1">Excluir</button>
+      </div>
+
+      {exercises.length === 0 ? (
+        <p className="text-xs text-brand-muted py-2">Nenhum exercício. Clique "+ Exercício" para adicionar.</p>
+      ) : (
+        <div className="space-y-1">
+          {exercises.map((te, idx) => {
+            const ex = store.exercises.find(e => e.id === te.exercise_id)
+            const groupColor = ex ? getMuscleGroupColor(ex.muscle_group_id) : ''
+            const groupName = ex ? getMuscleGroupName(ex.muscle_group_id) : ''
+            const wc = store.template_week_configs.find(c => c.template_exercise_id === te.id && c.week === 1)
+            const isEditing = editingId === te.id
+            return (
+              <div key={te.id} className="bg-brand-secondary bg-opacity-40 rounded px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
+                    <span className="text-sm text-white truncate">{ex?.name || `Exercício #${te.exercise_id}`}</span>
+                    {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
+                    {!isEditing && wc && (
+                      <span className="text-xs text-brand-green font-medium whitespace-nowrap">
+                        {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}
+                        {wc.suggested_weight_kg > 0 && ` · ${wc.suggested_weight_kg}kg`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Edit */}
+                    <button
+                      onClick={() => isEditing ? saveEdit(te) : startEdit(te)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center border transition-colors ${
+                        isEditing
+                          ? 'bg-brand-green bg-opacity-20 text-brand-green border-brand-green border-opacity-40'
+                          : 'text-brand-muted border-brand-secondary hover:text-brand-green hover:border-brand-green hover:border-opacity-40'
+                      }`}
+                      title={isEditing ? 'Salvar' : 'Editar'}
+                    >
+                      {isEditing ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      )}
+                    </button>
+                    {/* Move up */}
+                    <button onClick={() => handleMoveExercise(te, 'up')} disabled={idx === 0} className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors" title="Mover para cima">▲</button>
+                    {/* Move down */}
+                    <button onClick={() => handleMoveExercise(te, 'down')} disabled={idx === exercises.length - 1} className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors" title="Mover para baixo">▼</button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleRemoveExercise(te.id)}
+                      disabled={removing === te.id}
+                      className="w-7 h-7 rounded-full flex items-center justify-center border border-brand-secondary text-red-400 hover:text-red-300 hover:border-red-400 hover:border-opacity-40 transition-colors disabled:opacity-50"
+                      title="Remover exercício"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </div>
+                </div>
+                {/* Inline edit row */}
+                {isEditing && (
+                  <div className="flex items-center gap-2 mt-2 pl-7">
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Sets</label>
+                      <input type="number" value={editValues.sets} onChange={e => setEditValues(v => ({...v, sets: e.target.value}))} min={1} max={20} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Reps</label>
+                      <input type="number" value={editValues.repsMin} onChange={e => setEditValues(v => ({...v, repsMin: e.target.value}))} min={1} max={50} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                      <span className="text-[10px] text-brand-muted">–</span>
+                      <input type="number" value={editValues.repsMax} onChange={e => setEditValues(v => ({...v, repsMax: e.target.value}))} min={1} max={50} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Kg</label>
+                      <input type="number" value={editValues.weight} onChange={e => setEditValues(v => ({...v, weight: e.target.value}))} min={0} step={0.5} className="w-14 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <button onClick={() => setEditingId(null)} className="text-[10px] text-brand-muted hover:text-white transition-colors">✕</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <button
+        onClick={() => setShowAddExercise(true)}
+        className="w-full text-xs text-brand-green hover:text-white border border-dashed border-brand-secondary hover:border-brand-green rounded-lg py-2 transition-colors"
+      >
+        + Exercício
+      </button>
+
+      {showAddExercise && (
+        <AddExerciseModal
+          templatePlanId={plan.id}
+          totalWeeks={template.total_weeks}
+          onSave={handleAddExercise}
+          onClose={() => setShowAddExercise(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function TemplateCard({ template, onDelete, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showAddPlan, setShowAddPlan] = useState(false)
 
   const plans = store.template_plans.filter((p) => p.template_id === template.id)
 
@@ -143,8 +427,13 @@ function TemplateCard({ template, onDelete }) {
     }
   }
 
+  async function handleAddPlan({ name, dayLabel }) {
+    await templatesService.createTemplatePlan(template.id, { name, dayLabel })
+    onRefresh()
+  }
+
   return (
-    <div className="bg-brand-card border border-brand-secondary rounded-xl overflow-hidden">
+    <div className="bg-brand-card border border-brand-secondary rounded-xl overflow-visible">
       {/* Template header */}
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-4">
@@ -157,22 +446,18 @@ function TemplateCard({ template, onDelete }) {
               <span>{template.total_weeks} semana{template.total_weeks !== 1 ? 's' : ''}</span>
               <span>{plans.length} treino{plans.length !== 1 ? 's' : ''}</span>
               {scheme && (
-                <span className="inline-block bg-brand-secondary px-2 py-0.5 rounded-full">
-                  {scheme.name}
-                </span>
+                <span className="inline-block bg-brand-secondary px-2 py-0.5 rounded-full">{scheme.name}</span>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {plans.length > 0 && (
-              <button
-                onClick={() => setExpanded((v) => !v)}
-                className="text-brand-muted hover:text-white transition-colors text-sm px-2 py-1.5"
-              >
-                {expanded ? '▲' : '▼'}
-              </button>
-            )}
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-brand-muted hover:text-white transition-colors text-sm px-2 py-1.5"
+            >
+              {expanded ? '▲' : '▼'}
+            </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
@@ -184,59 +469,23 @@ function TemplateCard({ template, onDelete }) {
         </div>
       </div>
 
-      {/* Expanded: plans and exercises */}
-      {expanded && plans.length > 0 && (
-        <div className="border-t border-brand-secondary bg-brand-dark bg-opacity-40">
-          {plans.map((plan) => {
-            const planExercises = store.template_exercises.filter(
-              (te) => te.template_plan_id === plan.id
-            ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      {/* Expanded: editable plans and exercises */}
+      {expanded && (
+        <div className="border-t border-brand-secondary bg-brand-dark bg-opacity-40 px-5 py-4 space-y-3">
+          {plans.map((plan) => (
+            <TemplatePlanEditor key={plan.id} plan={plan} template={template} onRefresh={onRefresh} />
+          ))}
 
-            return (
-              <div key={plan.id} className="border-b border-brand-secondary last:border-b-0">
-                {/* Plan row */}
-                <div className="px-5 py-3 flex items-center gap-2">
-                  <span className="text-sm font-medium text-white">{plan.name}</span>
-                  {plan.day_label && (
-                    <span className="text-xs text-brand-muted">{plan.day_label}</span>
-                  )}
-                  <span className="ml-auto text-xs text-brand-muted">
-                    {planExercises.length} exercício{planExercises.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
+          <button
+            onClick={() => setShowAddPlan(true)}
+            className="w-full text-sm text-brand-green hover:text-white border border-dashed border-brand-secondary hover:border-brand-green rounded-lg py-2.5 transition-colors font-medium"
+          >
+            + Novo Treino
+          </button>
 
-                {/* Exercises within plan */}
-                {planExercises.length > 0 && (
-                  <div className="px-5 pb-3 space-y-1">
-                    {planExercises.map((te, idx) => {
-                      const exercise = store.exercises.find((ex) => ex.id === te.exercise_id)
-                      const muscleGroup = exercise
-                        ? store.muscle_groups.find((g) => g.id === exercise.muscle_group_id)
-                        : null
-                      return (
-                        <div
-                          key={te.id}
-                          className="flex items-center gap-3 py-1.5 px-3 bg-brand-secondary bg-opacity-30 rounded-lg"
-                        >
-                          <span className="text-brand-muted text-xs w-5 text-right shrink-0">
-                            {idx + 1}.
-                          </span>
-                          <span className="text-sm text-white flex-1 truncate">
-                            {exercise?.name ?? `Exercício #${te.exercise_id}`}
-                          </span>
-                          {muscleGroup && (
-                            <span className="text-xs text-brand-muted bg-brand-secondary px-2 py-0.5 rounded-full shrink-0">
-                              {muscleGroup.name}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {showAddPlan && (
+            <AddPlanModal onSave={handleAddPlan} onClose={() => setShowAddPlan(false)} />
+          )}
         </div>
       )}
     </div>
@@ -295,22 +544,14 @@ export default function TemplatesPage() {
         ) : (
           <div className="space-y-3">
             {templates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onDelete={handleDelete}
-              />
+              <TemplateCard key={template.id} template={template} onDelete={handleDelete} onRefresh={refresh} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Modal */}
       {modalOpen && (
-        <AddTemplateModal
-          onSave={handleCreate}
-          onClose={() => setModalOpen(false)}
-        />
+        <AddTemplateModal onSave={handleCreate} onClose={() => setModalOpen(false)} />
       )}
     </AdminLayout>
   )
