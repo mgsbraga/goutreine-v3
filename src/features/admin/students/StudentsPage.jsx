@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { navigate } from '../../../app/router'
+import { sb } from '../../../lib/supabase'
 import { store } from '../../../shared/constants/store'
 import { getActivePhase } from '../../../shared/utils/phase-helpers'
 import AdminLayout from '../AdminLayout'
@@ -80,9 +81,137 @@ function StudentCard({ student }) {
   )
 }
 
+function AddStudentModal({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return setError('Nome é obrigatório.')
+    if (!email.trim()) return setError('Email é obrigatório.')
+    if (!password || password.length < 6) return setError('Senha deve ter pelo menos 6 caracteres.')
+    setError(null)
+    setSaving(true)
+    try {
+      if (sb) {
+        // 1. Create auth user via Supabase signUp (anon key)
+        const { data: authData, error: authError } = await sb.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { name: name.trim(), role: 'student' },
+          },
+        })
+        if (authError) throw authError
+
+        // 2. Upsert profile (trigger may already create it, but ensure name/role)
+        if (authData?.user?.id) {
+          await sb.from('profiles').upsert({
+            id: authData.user.id,
+            name: name.trim(),
+            email: email.trim(),
+            role: 'student',
+          })
+          // Add to local store
+          store.users.push({
+            id: authData.user.id,
+            name: name.trim(),
+            email: email.trim(),
+            role: 'student',
+          })
+        }
+      } else {
+        // Mock mode
+        const newId = Math.max(0, ...store.users.map(u => typeof u.id === 'number' ? u.id : 0)) + 1
+        store.users.push({
+          id: newId,
+          name: name.trim(),
+          email: email.trim(),
+          role: 'student',
+        })
+      }
+      onCreated()
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Erro ao cadastrar aluno.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
+        <h2 className="text-lg font-bold">Novo Aluno</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Nome</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Nome completo"
+              autoFocus
+              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="aluno@email.com"
+              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Senha inicial</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
+            />
+            <p className="text-[11px] text-brand-muted mt-1">O aluno pode trocar depois em "Esqueci minha senha"</p>
+          </div>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:opacity-80 transition-opacity"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+            >
+              {saving ? 'Cadastrando...' : 'Cadastrar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [, forceUpdate] = useState(0)
 
   const students = useMemo(() => {
     let list = store.users.filter(u => u.role === 'student')
@@ -115,11 +244,20 @@ export default function StudentsPage() {
     <AdminLayout>
       <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">Alunos</h1>
-          <p className="text-brand-muted text-sm mt-1">
-            {totalStudents} aluno{totalStudents !== 1 ? 's' : ''} cadastrado{totalStudents !== 1 ? 's' : ''}
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Alunos</h1>
+            <p className="text-brand-muted text-sm mt-1">
+              {totalStudents} aluno{totalStudents !== 1 ? 's' : ''} cadastrado{totalStudents !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Novo Aluno
+          </button>
         </div>
 
         {/* Search */}
@@ -168,6 +306,12 @@ export default function StudentsPage() {
               <StudentCard key={student.id} student={student} />
             ))}
           </div>
+        )}
+        {showAddModal && (
+          <AddStudentModal
+            onClose={() => setShowAddModal(false)}
+            onCreated={() => forceUpdate(n => n + 1)}
+          />
         )}
       </div>
     </AdminLayout>
