@@ -55,6 +55,9 @@ export async function deleteTemplate(id) {
   }
   await sb.from('template_plans').delete().eq('template_id', id)
   store.template_plans = store.template_plans.filter(p => p.template_id !== id)
+  // Clear template_id reference from any training_phases that used this template
+  await sb.from('training_phases').update({ template_id: null }).eq('template_id', id)
+  store.training_phases.forEach(p => { if (p.template_id === id) p.template_id = null })
   const { error } = await sb.from('templates').delete().eq('id', id)
   if (error) throw error
   store.templates = store.templates.filter((t) => t.id !== id)
