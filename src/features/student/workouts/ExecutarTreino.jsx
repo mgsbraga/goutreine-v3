@@ -615,6 +615,17 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                   </div>
                 </div>
                 <h2 className="text-2xl font-bold">{currentExercise.name}</h2>
+                {isInSuperset && supersetGroup.length > 1 && (
+                  <p className="text-xs text-yellow-400 mt-1">
+                    ⇄ com {supersetGroup
+                      .filter(pe => pe.exercise_id !== currentPlanExercise.exercise_id)
+                      .map(pe => {
+                        const ex = store.exercises.find(e => e.id === pe.exercise_id)
+                        return ex?.name || getExerciseName(pe.exercise_id)
+                      })
+                      .join(', ')}
+                  </p>
+                )}
               </div>
 
               {/* Set indicator circles */}
@@ -646,6 +657,10 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                     <input
                       key={logKey}
                       type="number"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      step="0.5"
+                      min="0"
                       placeholder={
                         prevLog ? String(prevLog.weight)
                           : currentPlanExercise.suggested_weight_kg > 0
@@ -655,6 +670,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                       defaultValue={currentLogged?.weight || prevLog?.weight || currentPlanExercise.suggested_weight_kg || ''}
                       className="bg-brand-dark border border-brand-muted rounded px-4 py-3 text-white text-center text-2xl font-bold w-full focus:border-brand-green focus:outline-none transition"
                       id="weight-current"
+                      onFocus={e => e.target.select()}
                     />
                   </div>
 
@@ -674,11 +690,14 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                     <input
                       key={logKey + '-reps'}
                       type="number"
-                      min={1}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min="1"
                       placeholder={`${currentPlanExercise.reps_min}–${currentPlanExercise.reps_max}`}
                       defaultValue={currentLogged?.reps || prevLog?.reps || currentPlanExercise.reps_max || currentPlanExercise.reps_min || ''}
                       className="bg-brand-dark border border-brand-muted rounded px-4 py-3 text-white text-center text-2xl font-bold w-full focus:border-brand-green focus:outline-none transition"
                       id="reps-current"
+                      onFocus={e => e.target.select()}
                     />
                   </div>
 
@@ -697,17 +716,26 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                             <span className="text-yellow-400 text-xs font-bold w-5">D{idx + 1}</span>
                             <input
                               type="number"
+                              inputMode="decimal"
+                              pattern="[0-9]*\.?[0-9]*"
+                              step="0.5"
+                              min="0"
                               placeholder="Peso"
                               value={drop.weight}
                               onChange={(e) => updateDropWeight(idx, e.target.value)}
+                              onFocus={e => e.target.select()}
                               className="bg-brand-dark border border-yellow-400 border-opacity-40 rounded px-2 py-2 text-white text-center text-sm font-bold flex-1 focus:border-yellow-400 focus:outline-none"
                             />
                             <span className="text-brand-muted text-xs">kg</span>
                             <input
                               type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              min="1"
                               placeholder="Reps"
                               value={drop.reps}
                               onChange={(e) => updateDropReps(idx, e.target.value)}
+                              onFocus={e => e.target.select()}
                               className="bg-brand-dark border border-yellow-400 border-opacity-40 rounded px-2 py-2 text-white text-center text-sm font-bold w-16 focus:border-yellow-400 focus:outline-none"
                             />
                           </div>
