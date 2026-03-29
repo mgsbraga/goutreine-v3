@@ -248,6 +248,8 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
 function PlanEditor({ plan, onRefresh }) {
   const [showAddExercise, setShowAddExercise] = useState(false)
   const [removing, setRemoving] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editValues, setEditValues] = useState({ sets: 3, repsMin: 8, repsMax: 12, weight: 0 })
 
   const exercises = store.plan_exercises
     .filter(pe => pe.plan_id === plan.id)
@@ -329,6 +331,34 @@ function PlanEditor({ plan, onRefresh }) {
     }
   }
 
+  function startEdit(pe) {
+    const wc = store.week_configs.find(c => c.plan_exercise_id === pe.id && c.week === 1)
+    setEditValues({
+      sets: wc?.sets || 3,
+      repsMin: wc?.reps_min || 8,
+      repsMax: wc?.reps_max || 12,
+      weight: wc?.suggested_weight_kg || 0,
+    })
+    setEditingId(pe.id)
+  }
+
+  async function saveEdit(pe) {
+    const phase = store.training_phases.find(p => p.id === plan.phase_id)
+    const totalWeeks = phase?.total_weeks || 8
+    const configs = Array.from({ length: totalWeeks }, (_, i) => ({
+      week: i + 1,
+      sets: Number(editValues.sets) || 3,
+      reps_min: Number(editValues.repsMin) || 8,
+      reps_max: Number(editValues.repsMax) || 12,
+      suggested_weight_kg: Number(editValues.weight) || 0,
+      drop_sets: 0,
+      notes: '',
+    }))
+    await programsService.bulkUpdateWeekConfigs(pe.id, configs)
+    setEditingId(null)
+    onRefresh()
+  }
+
   async function handleDeletePlan() {
     if (!confirm(`Excluir o treino "${plan.name}"?`)) return
     await programsService.deletePlan(plan.id)
@@ -356,62 +386,101 @@ function PlanEditor({ plan, onRefresh }) {
             const wc = store.week_configs.find(c => c.plan_exercise_id === pe.id && c.week === 1)
             const prevPe = idx > 0 ? exercises[idx - 1] : null
             const isConjugated = pe.superset_group && prevPe?.superset_group === pe.superset_group
+            const isEditing = editingId === pe.id
             return (
-              <div key={pe.id} className={`flex items-center justify-between gap-2 bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${pe.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
-                  <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
-                  {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
-                  {wc && (
-                    <span className="text-xs text-brand-green font-medium whitespace-nowrap">
-                      {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}
-                      {wc.suggested_weight_kg > 0 && ` · ${wc.suggested_weight_kg}kg`}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Conj button */}
-                  {idx > 0 && (
+              <div key={pe.id} className={`bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${pe.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
+                    <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
+                    {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
+                    {!isEditing && wc && (
+                      <span className="text-xs text-brand-green font-medium whitespace-nowrap">
+                        {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}
+                        {wc.suggested_weight_kg > 0 && ` · ${wc.suggested_weight_kg}kg`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Conj button */}
+                    {idx > 0 && (
+                      <button
+                        onClick={() => handleToggleConjugado(pe, prevPe)}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center border transition-colors ${
+                          isConjugated
+                            ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 border-yellow-400 border-opacity-40'
+                            : 'text-brand-muted border-brand-secondary hover:text-yellow-400 hover:border-yellow-400 hover:border-opacity-40'
+                        }`}
+                        title={isConjugated ? 'Desfazer conjugado' : 'Conjugar com exercício anterior'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+                      </button>
+                    )}
+                    {/* Edit */}
                     <button
-                      onClick={() => handleToggleConjugado(pe, prevPe)}
-                      className={`text-[10px] font-bold px-1.5 py-1 rounded border transition-colors ${
-                        isConjugated
-                          ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 border-yellow-400 border-opacity-40'
-                          : 'text-brand-muted border-brand-secondary hover:text-yellow-400 hover:border-yellow-400 hover:border-opacity-40'
+                      onClick={() => isEditing ? saveEdit(pe) : startEdit(pe)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center border transition-colors ${
+                        isEditing
+                          ? 'bg-brand-green bg-opacity-20 text-brand-green border-brand-green border-opacity-40'
+                          : 'text-brand-muted border-brand-secondary hover:text-brand-green hover:border-brand-green hover:border-opacity-40'
                       }`}
-                      title={isConjugated ? 'Desfazer conjugado' : 'Conjugar com exercício anterior'}
+                      title={isEditing ? 'Salvar' : 'Editar'}
                     >
-                      Conj
+                      {isEditing ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      )}
                     </button>
-                  )}
-                  {/* Move up */}
-                  <button
-                    onClick={() => handleMoveExercise(pe, 'up')}
-                    disabled={idx === 0}
-                    className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
-                    title="Mover para cima"
-                  >
-                    ▲
-                  </button>
-                  {/* Move down */}
-                  <button
-                    onClick={() => handleMoveExercise(pe, 'down')}
-                    disabled={idx === exercises.length - 1}
-                    className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
-                    title="Mover para baixo"
-                  >
-                    ▼
-                  </button>
-                  {/* Delete */}
-                  <button
-                    onClick={() => handleRemoveExercise(pe.id)}
-                    disabled={removing === pe.id}
-                    className="text-red-400 hover:text-red-300 text-sm px-1 py-1 disabled:opacity-50 transition-colors"
-                    title="Remover exercício"
-                  >
-                    🗑
-                  </button>
+                    {/* Move up */}
+                    <button
+                      onClick={() => handleMoveExercise(pe, 'up')}
+                      disabled={idx === 0}
+                      className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
+                      title="Mover para cima"
+                    >
+                      ▲
+                    </button>
+                    {/* Move down */}
+                    <button
+                      onClick={() => handleMoveExercise(pe, 'down')}
+                      disabled={idx === exercises.length - 1}
+                      className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
+                      title="Mover para baixo"
+                    >
+                      ▼
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleRemoveExercise(pe.id)}
+                      disabled={removing === pe.id}
+                      className="w-7 h-7 rounded-full flex items-center justify-center border border-brand-secondary text-red-400 hover:text-red-300 hover:border-red-400 hover:border-opacity-40 transition-colors disabled:opacity-50"
+                      title="Remover exercício"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </div>
                 </div>
+                {/* Inline edit row */}
+                {isEditing && (
+                  <div className="flex items-center gap-2 mt-2 pl-7">
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Sets</label>
+                      <input type="number" value={editValues.sets} onChange={e => setEditValues(v => ({...v, sets: e.target.value}))} min={1} max={20} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Reps</label>
+                      <input type="number" value={editValues.repsMin} onChange={e => setEditValues(v => ({...v, repsMin: e.target.value}))} min={1} max={50} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                      <span className="text-[10px] text-brand-muted">–</span>
+                      <input type="number" value={editValues.repsMax} onChange={e => setEditValues(v => ({...v, repsMax: e.target.value}))} min={1} max={50} className="w-12 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-brand-muted">Kg</label>
+                      <input type="number" value={editValues.weight} onChange={e => setEditValues(v => ({...v, weight: e.target.value}))} min={0} step={0.5} className="w-14 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                    </div>
+                    <button onClick={() => setEditingId(null)} className="text-[10px] text-brand-muted hover:text-white transition-colors">✕</button>
+                  </div>
+                )}
               </div>
             )
           })}
