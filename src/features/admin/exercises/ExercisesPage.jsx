@@ -8,7 +8,6 @@ import AdminLayout from '../AdminLayout'
 function ActivationBadges({ exercise }) {
   const activations = getExerciseActivations(exercise)
   if (activations.length === 0) return null
-  if (activations.length > 1) console.log('[ActivationBadges]', exercise.name, activations)
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {activations.map((a, i) => (
