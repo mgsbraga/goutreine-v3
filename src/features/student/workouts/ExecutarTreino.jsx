@@ -233,6 +233,11 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
   }
 
   const handleSaveWorkout = async () => {
+    if (!user?.id) {
+      console.error('Erro ao salvar treino: usuário não carregado')
+      navigate('dashboard')
+      return
+    }
     try {
       const durationMinutes = Math.floor(elapsedSeconds / 60)
       const session = await createSession(user.id, planId, durationMinutes, '')
@@ -242,11 +247,15 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
         const [exIdx, setNum] = key.split('-').map(Number)
         const pe = planExercises[exIdx]
         if (pe) {
+          const reps = parseInt(val.reps, 10) || 0
+          const weight = parseFloat(val.weight) || 0
+          // Skip entries with no reps and no weight (empty/unfilled sets)
+          if (reps === 0 && weight === 0) return
           logEntries.push({
             exercise_id: pe.exercise_id,
             set_number: setNum,
-            reps_done: parseInt(val.reps, 10),
-            weight_kg: parseFloat(val.weight),
+            reps_done: reps,
+            weight_kg: weight,
             notes: '',
           })
           if (val.drops && val.drops.length > 0) {
@@ -272,6 +281,8 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
       }
     } catch (err) {
       console.error('Erro ao salvar treino:', err)
+      alert('Erro ao salvar treino. Tente novamente ou verifique sua conexão.')
+      return
     }
     navigate('dashboard')
   }
