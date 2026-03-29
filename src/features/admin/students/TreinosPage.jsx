@@ -592,10 +592,11 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
     return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
+  const [menuOpen, setMenuOpen] = useState(false)
+
   async function handleActivate() {
     setLoading(true)
     try {
-      // Deactivate any currently active phases for this student
       const activePhasesForStudent = store.training_phases.filter(
         (p) => p.student_id === phase.student_id && p.status === 'active' && p.id !== phase.id
       )
@@ -603,6 +604,16 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
         await programsService.updatePhase(ap.id, { status: 'completed' })
       }
       await programsService.updatePhase(phase.id, { status: 'active' })
+      onRefresh()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDeactivate() {
+    setLoading(true)
+    try {
+      await programsService.updatePhase(phase.id, { status: 'planned' })
       onRefresh()
     } finally {
       setLoading(false)
@@ -619,7 +630,24 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
     }
   }
 
+  async function handleReactivate() {
+    setLoading(true)
+    try {
+      const activePhasesForStudent = store.training_phases.filter(
+        (p) => p.student_id === phase.student_id && p.status === 'active' && p.id !== phase.id
+      )
+      for (const ap of activePhasesForStudent) {
+        await programsService.updatePhase(ap.id, { status: 'completed' })
+      }
+      await programsService.updatePhase(phase.id, { status: 'active' })
+      onRefresh()
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleDeletePhase() {
+    setMenuOpen(false)
     if (!confirm(`Excluir a fase "${phase.name}" e todos os seus treinos?`)) return
     setLoading(true)
     try {
@@ -634,7 +662,7 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
   }
 
   return (
-    <div className="bg-brand-card border border-brand-secondary rounded-xl overflow-hidden">
+    <div className="bg-brand-card border border-brand-secondary rounded-xl">
       {/* Phase header */}
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-4">
@@ -651,47 +679,87 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Status circle buttons */}
             {phase.status === 'planned' && (
               <button
                 onClick={handleActivate}
                 disabled={loading}
-                className="text-xs bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50"
+                className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-brand-green bg-brand-green/15 hover:bg-brand-green/30 transition-colors disabled:opacity-50"
+                title="Ativar"
               >
-                Ativar
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               </button>
             )}
             {phase.status === 'active' && (
+              <>
+                <button
+                  onClick={handleDeactivate}
+                  disabled={loading}
+                  className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-blue-400 bg-blue-500/15 hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                  title="Desativar"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button
+                  onClick={handleComplete}
+                  disabled={loading}
+                  className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-amber-400 bg-amber-400/15 hover:bg-amber-400/30 transition-colors disabled:opacity-50"
+                  title="Concluir"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                </button>
+              </>
+            )}
+            {phase.status === 'completed' && (
               <button
-                onClick={handleComplete}
+                onClick={handleReactivate}
                 disabled={loading}
-                className="text-xs bg-brand-secondary text-brand-muted border border-brand-secondary px-3 py-1.5 rounded-lg font-medium hover:text-white transition-colors disabled:opacity-50"
+                className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-brand-green bg-brand-green/15 hover:bg-brand-green/30 transition-colors disabled:opacity-50"
+                title="Reativar"
               >
-                Concluir
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               </button>
             )}
-            <button
-              onClick={() => setShowCopyModal(true)}
-              className="text-xs bg-brand-secondary text-white border border-brand-secondary px-3 py-1.5 rounded-lg font-medium hover:bg-opacity-80 transition-colors"
-              title="Copiar para outros alunos"
-            >
-              Copiar
-            </button>
-            <button
-              onClick={() => setShowTemplateModal(true)}
-              className="text-xs bg-brand-secondary text-white border border-brand-secondary px-3 py-1.5 rounded-lg font-medium hover:bg-opacity-80 transition-colors"
-              title="Salvar como template reutilizável"
-            >
-              → Template
-            </button>
-            <button
-              onClick={handleDeletePhase}
-              disabled={loading}
-              className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1.5 disabled:opacity-50"
-              title="Excluir fase"
-            >
-              🗑
-            </button>
+
+            {/* ⋯ Dropdown menu */}
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                className={`w-[30px] h-[30px] rounded-full flex items-center justify-center text-brand-muted hover:bg-brand-secondary hover:text-white transition-colors text-lg ${menuOpen ? 'bg-brand-secondary text-brand-green' : ''}`}
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute top-[calc(100%+6px)] right-0 z-50 bg-[#333] border border-[#4a4a4a] rounded-xl min-w-[200px] p-1 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+                    <button
+                      onClick={() => { setMenuOpen(false); setShowCopyModal(true) }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
+                    >
+                      <span className="text-xs opacity-70">⧉</span> Copiar para aluno
+                    </button>
+                    <button
+                      onClick={() => { setMenuOpen(false); setShowTemplateModal(true) }}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-[#ddd] rounded-lg hover:bg-white/[0.08] hover:text-white transition-colors"
+                    >
+                      <span className="text-xs opacity-70">📋</span> Salvar como template
+                    </button>
+                    <div className="h-px bg-[#4a4a4a] mx-2 my-1" />
+                    <button
+                      onClick={handleDeletePhase}
+                      disabled={loading}
+                      className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-sm text-red-400 rounded-lg hover:bg-red-400/10 transition-colors disabled:opacity-50"
+                    >
+                      <span className="text-xs">🗑</span> Excluir
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Expand toggle */}
             <button
               onClick={() => setExpanded((v) => !v)}
               className="text-brand-muted hover:text-white transition-colors text-sm px-2 py-1.5"
