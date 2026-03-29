@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useAuth } from '../../contexts/auth-context'
 import { navigate } from '../../app/router'
+import { store } from '../../shared/constants/store'
+import { getActivePhase } from '../../shared/utils/phase-helpers'
 import {
   IconHome,
   IconDumbbell,
@@ -31,6 +33,33 @@ export default function StudentLayout({ children }) {
     } finally {
       setSyncing(false)
     }
+  }
+
+  // Detect workout-in-progress across all plans
+  const wipInfo = useMemo(() => {
+    if (!user?.id) return null
+    // Don't show banner if we're already on the ExecutarTreino page
+    if (window.location.hash.includes('executar')) return null
+    const phase = getActivePhase(user.id)
+    if (!phase) return null
+    const plans = store.training_plans.filter(p => p.phase_id === phase.id)
+    for (const plan of plans) {
+      try {
+        const raw = localStorage.getItem(`goutreine_wip_${plan.id}`)
+        if (raw) {
+          const wip = JSON.parse(raw)
+          if (wip.userId === user.id && (Date.now() - wip.savedAt) < 4 * 60 * 60 * 1000) {
+            return { plan, setsCompleted: Object.keys(wip.setLogs || {}).length }
+          }
+        }
+      } catch {}
+    }
+    return null
+  }, [user?.id, window.location.hash])
+
+  function discardWIP(planId) {
+    try { localStorage.removeItem(`goutreine_wip_${planId}`) } catch {}
+    window.location.reload()
   }
 
   async function handleLogout() {
@@ -103,6 +132,31 @@ export default function StudentLayout({ children }) {
             className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 px-3 py-1 rounded-md font-semibold transition-colors disabled:opacity-50"
           >
             {syncing ? 'Sincronizando...' : 'Sincronizar agora'}
+          </button>
+        </div>
+      )}
+
+      {/* Workout-in-progress banner */}
+      {wipInfo && (
+        <div className="bg-brand-green/10 border-b border-brand-green/30 px-4 py-2.5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-brand-green/20 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A4E44B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-white">{wipInfo.plan.name} em andamento</p>
+            <p className="text-[10px] text-brand-muted">{wipInfo.setsCompleted} série{wipInfo.setsCompleted !== 1 ? 's' : ''} feita{wipInfo.setsCompleted !== 1 ? 's' : ''}</p>
+          </div>
+          <button
+            onClick={() => discardWIP(wipInfo.plan.id)}
+            className="text-[10px] text-brand-muted hover:text-red-400 px-2 py-1 transition-colors shrink-0"
+          >
+            Descartar
+          </button>
+          <button
+            onClick={() => navigate(`executar/${wipInfo.plan.id}`)}
+            className="text-xs bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg font-semibold shrink-0"
+          >
+            Continuar
           </button>
         </div>
       )}

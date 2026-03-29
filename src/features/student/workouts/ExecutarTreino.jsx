@@ -411,7 +411,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
               onClick={handleSaveWorkout}
               className="w-full btn-green py-2 rounded font-medium"
             >
-              Voltar ao Dashboard
+              Finalizar Treino
             </button>
           </div>
         </div>

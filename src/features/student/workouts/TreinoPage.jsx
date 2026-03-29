@@ -42,27 +42,6 @@ export default function TreinoPage() {
     ? store.training_plans.filter(p => p.phase_id === phase.id)
     : []
 
-  // Check for workout-in-progress
-  const wipPlan = (() => {
-    for (const plan of plans) {
-      try {
-        const raw = localStorage.getItem(`goutreine_wip_${plan.id}`)
-        if (raw) {
-          const wip = JSON.parse(raw)
-          // Only show if less than 4 hours old and belongs to current user
-          if (wip.userId === user?.id && (Date.now() - wip.savedAt) < 4 * 60 * 60 * 1000) {
-            return { plan, wip, setsCompleted: Object.keys(wip.setLogs || {}).length }
-          }
-        }
-      } catch {}
-    }
-    return null
-  })()
-
-  function discardWIP(planId) {
-    try { localStorage.removeItem(`goutreine_wip_${planId}`) } catch {}
-  }
-
   function togglePlan(planId) {
     setExpandedPlan(prev => prev === planId ? null : planId)
   }
@@ -70,37 +49,6 @@ export default function TreinoPage() {
   return (
     <StudentLayout>
       <div className="p-4 max-w-2xl mx-auto">
-
-        {/* Resume workout-in-progress banner */}
-        {wipPlan && (
-          <div className="mb-4 bg-brand-green/10 border border-brand-green/30 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-brand-green/20 flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A4E44B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">Treino em andamento</p>
-                <p className="text-xs text-brand-muted mt-0.5">
-                  {wipPlan.plan.name} · {wipPlan.setsCompleted} série{wipPlan.setsCompleted !== 1 ? 's' : ''} feita{wipPlan.setsCompleted !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => { discardWIP(wipPlan.plan.id); window.location.reload() }}
-                  className="text-xs text-brand-muted hover:text-red-400 px-2 py-1.5 rounded-lg transition-colors"
-                >
-                  Descartar
-                </button>
-                <button
-                  onClick={() => navigate(`executar/${wipPlan.plan.id}`)}
-                  className="text-xs bg-brand-green text-brand-dark px-4 py-1.5 rounded-lg font-semibold"
-                >
-                  Continuar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Header */}
         <div className="mb-6">
