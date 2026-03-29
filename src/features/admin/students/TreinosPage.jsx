@@ -212,6 +212,10 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
   const [suggestedWeight, setSuggestedWeight] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Check if phase has a periodização — if so, sets/reps come from the scheme
+  const phase = store.training_phases.find(p => p.id === phaseId)
+  const hasScheme = !!phase?.scheme_id
+
   const groups = store.muscle_groups.filter(g =>
     store.exercises.some(e => e.muscle_group_id === g.id)
   )
@@ -229,9 +233,9 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
         exerciseId: parseInt(selectedExercise),
         restSeconds: Number(restSeconds) || 90,
         order: existingCount + 1,
-        sets: Number(sets) || 3,
-        repsMin: Number(repsMin) || 8,
-        repsMax: Number(repsMax) || 12,
+        sets: hasScheme ? null : (Number(sets) || 3),
+        repsMin: hasScheme ? null : (Number(repsMin) || 8),
+        repsMax: hasScheme ? null : (Number(repsMax) || 12),
         suggestedWeight: Number(suggestedWeight) || 0,
         phaseId,
       })
@@ -242,7 +246,7 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
         <h2 className="text-lg font-bold">Adicionar Exercício</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -264,28 +268,39 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-sm text-brand-muted mb-1">Séries</label>
-              <input type="number" value={sets} onChange={e => setSets(e.target.value)} min={1} max={10} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+
+          {/* Sets/reps only shown if NO periodização is set — otherwise the scheme defines them */}
+          {!hasScheme && (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-sm text-brand-muted mb-1">Séries</label>
+                <input type="number" inputMode="numeric" value={sets} onChange={e => setSets(e.target.value)} min={1} max={10} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+              </div>
+              <div>
+                <label className="block text-sm text-brand-muted mb-1">Reps mín</label>
+                <input type="number" inputMode="numeric" value={repsMin} onChange={e => setRepsMin(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+              </div>
+              <div>
+                <label className="block text-sm text-brand-muted mb-1">Reps máx</label>
+                <input type="number" inputMode="numeric" value={repsMax} onChange={e => setRepsMax(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm text-brand-muted mb-1">Reps mín</label>
-              <input type="number" value={repsMin} onChange={e => setRepsMin(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
-            </div>
-            <div>
-              <label className="block text-sm text-brand-muted mb-1">Reps máx</label>
-              <input type="number" value={repsMax} onChange={e => setRepsMax(e.target.value)} min={1} max={50} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
-            </div>
-          </div>
+          )}
+
+          {hasScheme && (
+            <p className="text-[11px] text-brand-muted bg-brand-dark rounded-lg px-3 py-2 border border-brand-secondary">
+              Séries e repetições definidas pela periodização selecionada. Edite em ⋯ → Editar Fases.
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm text-brand-muted mb-1">Carga sugerida (kg)</label>
-              <input type="number" value={suggestedWeight} onChange={e => setSuggestedWeight(e.target.value)} min={0} step={0.5} placeholder="Opcional" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
+              <input type="number" inputMode="decimal" value={suggestedWeight} onChange={e => setSuggestedWeight(e.target.value)} min={0} step={0.5} placeholder="Opcional" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
             </div>
             <div>
               <label className="block text-sm text-brand-muted mb-1">Descanso (seg)</label>
-              <input type="number" value={restSeconds} onChange={e => setRestSeconds(e.target.value)} min={0} max={300} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+              <input type="number" inputMode="numeric" value={restSeconds} onChange={e => setRestSeconds(e.target.value)} min={0} max={300} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
             </div>
           </div>
           <div className="flex gap-3 pt-1">
@@ -310,18 +325,32 @@ function PlanEditor({ plan, onRefresh }) {
 
   async function handleAddExercise({ exerciseId, restSeconds, order, sets, repsMin, repsMax, suggestedWeight, phaseId }) {
     const newPe = await programsService.addExerciseToPlan(plan.id, { exerciseId, restSeconds, order })
-    // Create week_configs for all weeks so sets/reps/weight appear in the student's workout
     const phase = store.training_phases.find(p => p.id === (phaseId || plan.phase_id))
     const totalWeeks = phase?.total_weeks || 8
-    const configs = Array.from({ length: totalWeeks }, (_, i) => ({
-      week: i + 1,
-      sets: sets || 3,
-      reps_min: repsMin || 8,
-      reps_max: repsMax || 12,
-      suggested_weight_kg: suggestedWeight || 0,
-      drop_sets: 0,
-      notes: '',
-    }))
+
+    // If phase has a periodização, use scheme configs for sets/reps per week
+    const scheme = phase?.scheme_id
+      ? PERIODIZATION_SCHEMES.find(s => s.id === phase.scheme_id)
+      : null
+    // Also check custom schemes
+    const customScheme = !scheme && phase?.scheme_id
+      ? (store.custom_schemes || []).find(s => s.id === phase.scheme_id)
+      : null
+    const schemeConfigs = scheme?.configs || customScheme?.configs || null
+
+    const configs = Array.from({ length: totalWeeks }, (_, i) => {
+      const weekNum = i + 1
+      const sc = schemeConfigs?.find(c => c.week === weekNum)
+      return {
+        week: weekNum,
+        sets: sc?.sets ?? sets ?? 3,
+        reps_min: sc?.reps_min ?? repsMin ?? 8,
+        reps_max: sc?.reps_max ?? repsMax ?? 12,
+        suggested_weight_kg: suggestedWeight || 0,
+        drop_sets: sc?.drop_sets ?? 0,
+        notes: '',
+      }
+    })
     await programsService.bulkUpdateWeekConfigs(newPe.id, configs)
     onRefresh()
   }
