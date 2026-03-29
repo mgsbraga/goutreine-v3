@@ -262,6 +262,33 @@ function TemplatePlanEditor({ plan, template, onRefresh }) {
     onRefresh()
   }
 
+  async function handleToggleConjugado(te, prevTe) {
+    if (!prevTe) return
+    const { sb } = await import('../../../lib/supabase')
+    if (te.superset_group && te.superset_group === prevTe.superset_group) {
+      if (sb) {
+        await sb.from('template_exercises').update({ superset_group: null }).eq('id', te.id)
+        await sb.from('template_exercises').update({ superset_group: null }).eq('id', prevTe.id)
+      }
+      te.superset_group = null
+      prevTe.superset_group = null
+      onRefresh()
+      return
+    }
+    const group = prevTe.superset_group || String.fromCharCode(
+      65 + [...new Set(exercises.filter(e => e.superset_group).map(e => e.superset_group))].length
+    )
+    if (sb) {
+      await sb.from('template_exercises').update({ superset_group: group }).eq('id', te.id)
+      if (!prevTe.superset_group) {
+        await sb.from('template_exercises').update({ superset_group: group }).eq('id', prevTe.id)
+      }
+    }
+    te.superset_group = group
+    prevTe.superset_group = group
+    onRefresh()
+  }
+
   function startEdit(te) {
     const wc = store.template_week_configs.find(c => c.template_exercise_id === te.id && c.week === 1)
     setEditValues({
@@ -314,9 +341,11 @@ function TemplatePlanEditor({ plan, template, onRefresh }) {
             const groupColor = ex ? getMuscleGroupColor(ex.muscle_group_id) : ''
             const groupName = ex ? getMuscleGroupName(ex.muscle_group_id) : ''
             const wc = store.template_week_configs.find(c => c.template_exercise_id === te.id && c.week === 1)
+            const prevTe = idx > 0 ? exercises[idx - 1] : null
+            const isConjugated = te.superset_group && prevTe?.superset_group === te.superset_group
             const isEditing = editingId === te.id
             return (
-              <div key={te.id} className="bg-brand-secondary bg-opacity-40 rounded px-3 py-2">
+              <div key={te.id} className={`bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${te.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
@@ -330,6 +359,20 @@ function TemplatePlanEditor({ plan, template, onRefresh }) {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* Conj button */}
+                    {idx > 0 && (
+                      <button
+                        onClick={() => handleToggleConjugado(te, prevTe)}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center border transition-colors ${
+                          isConjugated
+                            ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 border-yellow-400 border-opacity-40'
+                            : 'text-brand-muted border-brand-secondary hover:text-yellow-400 hover:border-yellow-400 hover:border-opacity-40'
+                        }`}
+                        title={isConjugated ? 'Desfazer conjugado' : 'Conjugar com exercício anterior'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg>
+                      </button>
+                    )}
                     {/* Edit */}
                     <button
                       onClick={() => isEditing ? saveEdit(te) : startEdit(te)}
