@@ -4,7 +4,7 @@ import { navigate } from '../../../app/router'
 import StudentLayout from '../StudentLayout'
 import { store } from '../../../shared/constants/store'
 import { Chart } from '../../../lib/chart'
-import { getActivePhase, getCurrentWeekForPhase, getExerciseName } from '../../../shared/utils/phase-helpers'
+import { getActivePhase, getExerciseName } from '../../../shared/utils/phase-helpers'
 import { getMuscleGroupName } from '../../../shared/utils/muscle-groups'
 import { IconTrophy, IconTrendingUp } from '../../../shared/components/icons'
 
@@ -28,19 +28,6 @@ const CHART_DEFAULTS = {
   color: { grid: '#3a3a3a', text: '#999999' },
 }
 
-const WEEK_PHASE_LABELS = {
-  1: 'Adaptação', 2: 'Adaptação',
-  3: 'Construção', 4: 'Construção',
-  5: 'Construção', 6: 'Intensificação',
-  7: 'Intensificação', 8: 'Deload',
-}
-
-const PHASE_COLORS = {
-  'Adaptação': '#64c8ff',
-  'Construção': '#A4E44B',
-  'Intensificação': '#ff9664',
-  'Deload': '#ffc83c',
-}
 
 // ─── ChartCanvas ─────────────────────────────────────────────────────────────
 
@@ -79,58 +66,6 @@ function getProgressionData(exerciseId, days) {
   }, [])
 }
 
-function getFrequencyData(days, studentId) {
-  const since = new Date()
-  since.setDate(since.getDate() - days)
-
-  const sessions = store.workout_sessions
-    .filter(s => s.student_id === studentId && new Date(s.date + 'T00:00:00') >= since)
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-
-  if (sessions.length === 0) return { labels: [], counts: [], colors: [] }
-
-  // Group by ISO week
-  const weekMap = {}
-  for (const session of sessions) {
-    const d = new Date(session.date + 'T00:00:00')
-    const year = d.getFullYear()
-    const startOfYear = new Date(year, 0, 1)
-    const weekNum = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
-    const key = `${year}-W${String(weekNum).padStart(2, '0')}`
-    weekMap[key] = (weekMap[key] || 0) + 1
-  }
-
-  // Compute week index relative to active phase
-  const phase = store.training_phases.find(
-    p => p.student_id === studentId && p.status === 'active'
-  )
-
-  const labels = []
-  const counts = []
-  const colors = []
-
-  for (const [weekKey, count] of Object.entries(weekMap)) {
-    let weekLabel = weekKey
-    let phaseWeek = null
-
-    if (phase?.start_date) {
-      const phaseStart = new Date(phase.start_date + 'T00:00:00')
-      // approximate phase week from year-week key
-      const [yr, wPart] = weekKey.split('-W')
-      const d = new Date(parseInt(yr), 0, 1 + (parseInt(wPart) - 1) * 7)
-      const diff = Math.floor((d - phaseStart) / (7 * 24 * 60 * 60 * 1000)) + 1
-      phaseWeek = Math.max(1, Math.min(8, diff))
-      weekLabel = `S${phaseWeek}`
-    }
-
-    const phaseName = phaseWeek ? (WEEK_PHASE_LABELS[phaseWeek] || 'Construção') : 'Construção'
-    labels.push(weekLabel)
-    counts.push(count)
-    colors.push(PHASE_COLORS[phaseName] || '#A4E44B')
-  }
-
-  return { labels, counts, colors }
-}
 
 function getVolumeByMuscleGroup(studentId, days) {
   const since = new Date()
@@ -216,10 +151,172 @@ function getPersonalRecords() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Drill-down: per-group detail ────────────────────────────────────────────
+
+function getVolumeByGroupDetailed(studentId, days) {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
+  const sessions = store.workout_sessions
+    .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+    .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
+
+  // Build: { groupId: { groupName, totalVolume, exercises: { exId: { name, color, sessionVolumes: { date: vol } } } } }
+  const groups = {}
+  const allDates = new Set()
+
+  for (const session of sessions) {
+    const dateStr = session.date || session.session_date
+    allDates.add(dateStr)
+    const logs = store.session_logs.filter(l => l.session_id === session.id)
+    for (const log of logs) {
+      const ex = store.exercises.find(e => e.id === log.exercise_id)
+      if (!ex) continue
+      const gid = ex.muscle_group_id
+      if (!groups[gid]) {
+        groups[gid] = {
+          groupName: getMuscleGroupName(gid),
+          groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B',
+          totalVolume: 0,
+          exercises: {},
+        }
+      }
+      if (!groups[gid].exercises[ex.id]) {
+        groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
+      }
+      const vol = (log.weight_kg || 0) * (log.reps_done || 0)
+      groups[gid].totalVolume += vol
+      groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
+        (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + vol
+    }
+  }
+
+  // Sort groups by total volume desc
+  return Object.entries(groups)
+    .filter(([, g]) => g.totalVolume > 0)
+    .sort((a, b) => b[1].totalVolume - a[1].totalVolume)
+    .map(([gid, g]) => ({
+      gid: parseInt(gid),
+      ...g,
+      dates: [...allDates].sort(),
+      exercises: Object.entries(g.exercises).map(([exId, ex]) => ({
+        exId: parseInt(exId),
+        ...ex,
+      })),
+    }))
+}
+
+// Distinct exercise colors for stacked bars
+const EXERCISE_COLORS = [
+  '#ff9664', '#ffc83c', '#64c8ff', '#A4E44B', '#ff6496',
+  '#9664ff', '#64ff96', '#ff78c8', '#cccccc', '#ff5050',
+  '#ffb432', '#50c8a0', '#c8a050', '#a0c850',
+]
+
+function GroupDetailChart({ group, chartId }) {
+  const buildChart = (ctx) => {
+    const datasets = group.exercises.map((ex, i) => ({
+      label: ex.name,
+      data: group.dates.map(d => Math.round(ex.sessionVolumes[d] || 0)),
+      backgroundColor: EXERCISE_COLORS[i % EXERCISE_COLORS.length],
+      borderRadius: 2,
+    }))
+
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels: group.dates, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: CHART_DEFAULTS.color.text, boxWidth: 12, font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              label: (item) => `${item.dataset.label}: ${item.raw.toLocaleString()} kg vol`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: CHART_DEFAULTS.color.text, font: { size: 10 } },
+            grid: { color: CHART_DEFAULTS.color.grid },
+          },
+          y: {
+            stacked: true,
+            ticks: { color: CHART_DEFAULTS.color.text, callback: v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v },
+            grid: { color: CHART_DEFAULTS.color.grid },
+            beginAtZero: true,
+          },
+        },
+      },
+    })
+  }
+
+  return <ChartCanvas id={chartId} buildChart={buildChart} deps={[group.dates.join(','), group.exercises.length]} />
+}
+
+function GroupDetailView({ studentId, days, onBack }) {
+  const groupData = getVolumeByGroupDetailed(studentId, days)
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div>
+        <button onClick={onBack} className="text-brand-muted text-sm hover:text-white transition-colors mb-1">
+          ← Voltar
+        </button>
+        <h2 className="text-lg font-bold text-white">Progresso por Grupamento</h2>
+        <p className="text-xs text-brand-muted">Últimos {days} dias</p>
+      </div>
+
+      {groupData.length === 0 ? (
+        <div className="card-dark rounded-xl p-8 text-center">
+          <p className="text-brand-muted text-sm">Nenhum dado no período.</p>
+        </div>
+      ) : (
+        groupData.map((group) => (
+          <div key={group.gid} className="card-dark rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.groupColor }} />
+                <h3 className="text-sm font-semibold text-white">{group.groupName}</h3>
+              </div>
+              <span className="text-xs font-medium" style={{ color: group.groupColor }}>
+                {group.totalVolume >= 1000
+                  ? `${(group.totalVolume / 1000).toFixed(1)}k kg vol.`
+                  : `${Math.round(group.totalVolume)} kg vol.`}
+              </span>
+            </div>
+            {/* Exercise badges */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {group.exercises.map((ex, i) => {
+                const totalExVol = Object.values(ex.sessionVolumes).reduce((s, v) => s + v, 0)
+                return (
+                  <span
+                    key={ex.exId}
+                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: EXERCISE_COLORS[i % EXERCISE_COLORS.length], color: '#1a1a1a' }}
+                  >
+                    {ex.name}: {totalExVol >= 1000 ? `${(totalExVol/1000).toFixed(1)}k` : Math.round(totalExVol)}kg
+                  </span>
+                )
+              })}
+            </div>
+            <GroupDetailChart group={group} chartId={`group-detail-${group.gid}`} />
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function ProgressoPage() {
   const { user } = useAuth()
   const [days, setDays] = useState(30)
   const [selectedExercise, setSelectedExercise] = useState(null)
+  const [showGroupDetail, setShowGroupDetail] = useState(false)
 
   const phase = getActivePhase(user?.id)
   const prs = getPersonalRecords()
@@ -238,7 +335,7 @@ export default function ProgressoPage() {
   )
 
   const progressionData = getProgressionData(defaultExercise, days)
-  const frequencyData = getFrequencyData(days, user?.id)
+
   const volumeData = getVolumeByMuscleGroup(user?.id, days)
   const weeklyVolumeData = getWeeklyVolumeData(user?.id, days)
 
@@ -278,37 +375,7 @@ export default function ProgressoPage() {
     })
   }
 
-  function buildFrequencyChart(ctx) {
-    return new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: frequencyData.labels,
-        datasets: [{
-          label: 'Treinos',
-          data: frequencyData.counts,
-          backgroundColor: frequencyData.colors,
-          borderRadius: 4,
-        }],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: false },
-        },
-        scales: {
-          x: {
-            ticks: { color: CHART_DEFAULTS.color.text },
-            grid: { color: CHART_DEFAULTS.color.grid },
-          },
-          y: {
-            ticks: { color: CHART_DEFAULTS.color.text, stepSize: 1 },
-            grid: { color: CHART_DEFAULTS.color.grid },
-            beginAtZero: true,
-          },
-        },
-      },
-    })
-  }
+
 
   function buildWeeklyVolumeChart(ctx) {
     return new Chart(ctx, {
@@ -475,33 +542,6 @@ export default function ProgressoPage() {
           )}
         </div>
 
-        {/* Frequency chart */}
-        <div className="card-dark rounded-xl p-4 mb-5">
-          <h2 className="text-base font-semibold text-white mb-1">Frequência Semanal</h2>
-
-          {/* Phase legend */}
-          <div className="flex flex-wrap gap-3 mb-3">
-            {Object.entries(PHASE_COLORS).map(([name, color]) => (
-              <span key={name} className="flex items-center gap-1 text-xs text-brand-muted">
-                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
-                {name}
-              </span>
-            ))}
-          </div>
-
-          {frequencyData.labels.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-6">
-              Nenhum treino registrado no período.
-            </p>
-          ) : (
-            <ChartCanvas
-              id="frequency-chart"
-              buildChart={buildFrequencyChart}
-              deps={[days, frequencyData.labels.join(',')]}
-            />
-          )}
-        </div>
-
         {/* Weekly volume comparison */}
         <div className="card-dark rounded-xl p-4 mb-5">
           <h2 className="text-base font-semibold text-white mb-1">Volume Semanal</h2>
@@ -522,20 +562,42 @@ export default function ProgressoPage() {
 
         {/* Volume by muscle group */}
         <div className="card-dark rounded-xl p-4 mb-5">
-          <h2 className="text-base font-semibold text-white mb-3">Volume por Grupo Muscular</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-white">Volume por Grupo Muscular</h2>
+            {volumeData.labels.length > 0 && (
+              <button
+                onClick={() => setShowGroupDetail(true)}
+                className="text-xs text-brand-green hover:underline"
+              >
+                Ver detalhes &rsaquo;
+              </button>
+            )}
+          </div>
 
           {volumeData.labels.length === 0 ? (
             <p className="text-brand-muted text-sm text-center py-6">
               Nenhum volume registrado ainda.
             </p>
           ) : (
-            <ChartCanvas
-              id="volume-chart"
-              buildChart={buildVolumeChart}
-              deps={[days, volumeData.labels.join(',')]}
-            />
+            <>
+              <ChartCanvas
+                id="volume-chart"
+                buildChart={buildVolumeChart}
+                deps={[days, volumeData.labels.join(',')]}
+              />
+              <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
+            </>
           )}
         </div>
+
+        {/* Group detail drill-down */}
+        {showGroupDetail && (
+          <GroupDetailView
+            studentId={user?.id}
+            days={days}
+            onBack={() => setShowGroupDetail(false)}
+          />
+        )}
 
       </div>
     </StudentLayout>

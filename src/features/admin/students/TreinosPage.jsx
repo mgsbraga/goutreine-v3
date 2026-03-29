@@ -657,9 +657,125 @@ function ChartCanvas({ id, buildChart, deps }) {
   return <canvas ref={canvasRef} id={id} />
 }
 
+const EXERCISE_COLORS = [
+  '#ff9664', '#ffc83c', '#64c8ff', '#A4E44B', '#ff6496',
+  '#9664ff', '#64ff96', '#ff78c8', '#cccccc', '#ff5050',
+  '#ffb432', '#50c8a0', '#c8a050', '#a0c850',
+]
+
+function getVolumeByGroupDetailed(studentId, days) {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  const sessions = store.workout_sessions
+    .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+    .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
+  const groups = {}
+  const allDates = new Set()
+  for (const session of sessions) {
+    const dateStr = session.date || session.session_date
+    allDates.add(dateStr)
+    const logs = store.session_logs.filter(l => l.session_id === session.id)
+    for (const log of logs) {
+      const ex = store.exercises.find(e => e.id === log.exercise_id)
+      if (!ex) continue
+      const gid = ex.muscle_group_id
+      if (!groups[gid]) {
+        groups[gid] = { groupName: getMuscleGroupName(gid), groupColor: MUSCLE_COLOR_MAP[gid] || '#A4E44B', totalVolume: 0, exercises: {} }
+      }
+      if (!groups[gid].exercises[ex.id]) {
+        groups[gid].exercises[ex.id] = { name: ex.name, sessionVolumes: {} }
+      }
+      const vol = (log.weight_kg || 0) * (log.reps_done || 0)
+      groups[gid].totalVolume += vol
+      groups[gid].exercises[ex.id].sessionVolumes[dateStr] =
+        (groups[gid].exercises[ex.id].sessionVolumes[dateStr] || 0) + vol
+    }
+  }
+  return Object.entries(groups)
+    .filter(([, g]) => g.totalVolume > 0)
+    .sort((a, b) => b[1].totalVolume - a[1].totalVolume)
+    .map(([gid, g]) => ({
+      gid: parseInt(gid), ...g,
+      dates: [...allDates].sort(),
+      exercises: Object.entries(g.exercises).map(([exId, ex]) => ({ exId: parseInt(exId), ...ex })),
+    }))
+}
+
+function AdminGroupDetailChart({ group, chartId }) {
+  const buildChart = (ctx) => {
+    const datasets = group.exercises.map((ex, i) => ({
+      label: ex.name,
+      data: group.dates.map(d => Math.round(ex.sessionVolumes[d] || 0)),
+      backgroundColor: EXERCISE_COLORS[i % EXERCISE_COLORS.length],
+      borderRadius: 2,
+    }))
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels: group.dates, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: CHART_TEXT, boxWidth: 12, font: { size: 10 } } },
+          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${item.raw.toLocaleString()} kg vol` } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: CHART_TEXT, font: { size: 10 } }, grid: { color: CHART_GRID } },
+          y: { stacked: true, ticks: { color: CHART_TEXT, callback: v => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v }, grid: { color: CHART_GRID }, beginAtZero: true },
+        },
+      },
+    })
+  }
+  return <ChartCanvas id={chartId} buildChart={buildChart} deps={[group.dates.join(','), group.exercises.length]} />
+}
+
+function AdminGroupDetailView({ studentId, days, onBack }) {
+  const groupData = getVolumeByGroupDetailed(studentId, days)
+  return (
+    <div className="space-y-4">
+      <div>
+        <button onClick={onBack} className="text-brand-muted text-sm hover:text-white transition-colors mb-1">← Voltar</button>
+        <h3 className="text-sm font-semibold text-white">Progresso por Grupamento</h3>
+        <p className="text-xs text-brand-muted">Últimos {days} dias</p>
+      </div>
+      {groupData.length === 0 ? (
+        <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
+          <p className="text-brand-muted text-sm">Nenhum dado no período.</p>
+        </div>
+      ) : (
+        groupData.map((group) => (
+          <div key={group.gid} className="bg-brand-card border border-brand-secondary rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.groupColor }} />
+                <span className="text-sm font-semibold text-white">{group.groupName}</span>
+              </div>
+              <span className="text-xs font-medium" style={{ color: group.groupColor }}>
+                {group.totalVolume >= 1000 ? `${(group.totalVolume / 1000).toFixed(1)}k kg vol.` : `${Math.round(group.totalVolume)} kg vol.`}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {group.exercises.map((ex, i) => {
+                const totalExVol = Object.values(ex.sessionVolumes).reduce((s, v) => s + v, 0)
+                return (
+                  <span key={ex.exId} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: EXERCISE_COLORS[i % EXERCISE_COLORS.length], color: '#1a1a1a' }}>
+                    {ex.name}: {totalExVol >= 1000 ? `${(totalExVol/1000).toFixed(1)}k` : Math.round(totalExVol)}kg
+                  </span>
+                )
+              })}
+            </div>
+            <AdminGroupDetailChart group={group} chartId={`admin-group-detail-${group.gid}`} />
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
 function StudentProgressContent({ studentId }) {
   const [days, setDays] = useState(30)
   const [selectedExercise, setSelectedExercise] = useState(null)
+  const [showGroupDetail, setShowGroupDetail] = useState(false)
 
   const since = new Date()
   since.setDate(since.getDate() - days)
@@ -919,11 +1035,21 @@ function StudentProgressContent({ studentId }) {
 
           {/* Volume by muscle group */}
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-white mb-3">Volume por Grupo Muscular</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">Volume por Grupo Muscular</h3>
+              {volumeData.labels.length > 0 && (
+                <button onClick={() => setShowGroupDetail(true)} className="text-xs text-brand-green hover:underline">
+                  Ver detalhes &rsaquo;
+                </button>
+              )}
+            </div>
             {volumeData.labels.length === 0 ? (
               <p className="text-brand-muted text-sm text-center py-6">Nenhum volume registrado no período.</p>
             ) : (
-              <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
+              <>
+                <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
+                <p className="text-xs text-brand-muted text-center mt-2">Clique para ver gráficos detalhados por grupamento</p>
+              </>
             )}
           </div>
 
@@ -936,6 +1062,11 @@ function StudentProgressContent({ studentId }) {
               <ChartCanvas id="admin-weekly-volume" buildChart={buildWeeklyVolumeChart} deps={[days, weeklyVolumeData.labels.join(',')]} />
             )}
           </div>
+
+          {/* Group detail drill-down */}
+          {showGroupDetail && (
+            <AdminGroupDetailView studentId={studentId} days={days} onBack={() => setShowGroupDetail(false)} />
+          )}
         </>
       )}
     </div>
