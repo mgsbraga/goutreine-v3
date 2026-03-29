@@ -41,7 +41,9 @@ export async function createExercise({ name, muscleGroupId, description, activat
     name, muscle_group_id: finalGroupId, description,
     muscle_activations: finalActivations,
   }
+  console.log('[createExercise] payload:', JSON.stringify(payload))
   let { data, error } = await sb.from('exercises').insert(payload).select().single()
+  console.log('[createExercise] result:', { data, error: error?.message })
   if (error && error.message?.includes('muscle_activations')) {
     // Column doesn't exist yet — insert without it
     const { data: d2, error: e2 } = await sb.from('exercises')
@@ -79,7 +81,9 @@ export async function updateExercise(id, { name, muscleGroupId, description, act
     name, muscle_group_id: finalGroupId, description,
     muscle_activations: finalActivations,
   }
+  console.log('[updateExercise] payload:', JSON.stringify(payload))
   let { data, error } = await sb.from('exercises').update(payload).eq('id', id).select().single()
+  console.log('[updateExercise] result:', { data, error: error?.message })
   if (error && error.message?.includes('muscle_activations')) {
     const { data: d2, error: e2 } = await sb.from('exercises')
       .update({ name, muscle_group_id: finalGroupId, description })

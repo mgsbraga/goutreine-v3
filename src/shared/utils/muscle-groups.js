@@ -27,15 +27,18 @@ export function getMuscleGroupName(groupId) {
 // Always returns at least [{ group_id, pct: 100 }] from muscle_group_id
 export function getExerciseActivations(exercise) {
   if (!exercise) return []
+  let activations = null
   if (exercise.muscle_activations && Array.isArray(exercise.muscle_activations) && exercise.muscle_activations.length > 0) {
-    return exercise.muscle_activations.sort((a, b) => b.pct - a.pct)
-  }
-  // Parse JSON string if needed
-  if (typeof exercise.muscle_activations === 'string') {
+    activations = exercise.muscle_activations
+  } else if (typeof exercise.muscle_activations === 'string') {
     try {
       const parsed = JSON.parse(exercise.muscle_activations)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed.sort((a, b) => b.pct - a.pct)
+      if (Array.isArray(parsed) && parsed.length > 0) activations = parsed
     } catch {}
+  }
+  if (activations) {
+    // Return sorted copy (never mutate the original)
+    return [...activations].sort((a, b) => (b.pct || 0) - (a.pct || 0))
   }
   // Fallback: single group at 100%
   if (exercise.muscle_group_id) {
