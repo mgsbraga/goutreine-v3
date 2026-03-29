@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { sb } from '../../../lib/supabase'
 import { store } from '../../../shared/constants/store'
 import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
-import { getExerciseName } from '../../../shared/utils/phase-helpers'
+import { getExerciseName, getActivePhase, getCurrentWeekForPhase } from '../../../shared/utils/phase-helpers'
 import { getMuscleGroupName, getMuscleGroupColor } from '../../../shared/utils/muscle-groups'
+import { Chart } from '../../../lib/chart'
 import AdminLayout from '../AdminLayout'
 
 function StatusBadge({ status }) {
@@ -635,6 +636,314 @@ function StudentTreinosContent({ studentId }) {
   )
 }
 
+// ─── Progress Tab ──────────────────────────────────────────────────────────
+
+const MUSCLE_COLOR_MAP = {
+  1: "#A4E44B", 2: "#cccccc", 3: "#ff9664", 4: "#9664ff", 5: "#ff6496",
+  6: "#64ff96", 7: "#ffc83c", 8: "#ff78c8", 9: "#64c8ff", 10: "#ff5050", 11: "#ffb432",
+}
+const CHART_GRID = '#3a3a3a'
+const CHART_TEXT = '#999999'
+
+function ChartCanvas({ id, buildChart, deps }) {
+  const canvasRef = useRef(null)
+  const chartRef = useRef(null)
+  useEffect(() => {
+    if (!canvasRef.current) return
+    if (chartRef.current) chartRef.current.destroy()
+    chartRef.current = buildChart(canvasRef.current.getContext('2d'))
+    return () => { if (chartRef.current) chartRef.current.destroy() }
+  }, deps)
+  return <canvas ref={canvasRef} id={id} />
+}
+
+function StudentProgressContent({ studentId }) {
+  const [days, setDays] = useState(30)
+  const [selectedExercise, setSelectedExercise] = useState(null)
+
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
+  // ── Data ──
+
+  // Personal records
+  const studentSessionIds = store.workout_sessions
+    .filter(s => s.student_id === studentId)
+    .map(s => s.id)
+  const studentLogs = store.session_logs.filter(l => studentSessionIds.includes(l.session_id))
+
+  const prs = (() => {
+    const prMap = {}
+    for (const log of studentLogs) {
+      if (!log.exercise_id || !log.weight_kg) continue
+      if (!prMap[log.exercise_id] || log.weight_kg > prMap[log.exercise_id]) {
+        prMap[log.exercise_id] = log.weight_kg
+      }
+    }
+    return Object.entries(prMap)
+      .map(([id, weight]) => ({ exerciseId: parseInt(id), weight }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 6)
+  })()
+
+  // Progression data for selected exercise
+  const defaultExercise = selectedExercise ?? (
+    store.exercises.find(ex =>
+      studentLogs.some(l => l.exercise_id === ex.id && l.weight_kg > 0)
+    )?.id ?? (store.exercises[0]?.id ?? null)
+  )
+
+  const progressionData = (() => {
+    const sessions = store.workout_sessions
+      .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+      .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
+    return sessions.reduce((acc, session) => {
+      const logs = store.session_logs.filter(
+        l => l.session_id === session.id && l.exercise_id === defaultExercise
+      )
+      if (logs.length === 0) return acc
+      const maxWeight = Math.max(...logs.map(l => l.weight_kg || 0))
+      if (maxWeight > 0) acc.push({ date: session.date || session.session_date, weight: maxWeight })
+      return acc
+    }, [])
+  })()
+
+  // Volume by muscle group
+  const volumeData = (() => {
+    const filteredSessionIds = store.workout_sessions
+      .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+      .map(s => s.id)
+    const logs = store.session_logs.filter(l => filteredSessionIds.includes(l.session_id))
+    const volumeMap = {}
+    for (const log of logs) {
+      const ex = store.exercises.find(e => e.id === log.exercise_id)
+      if (!ex) continue
+      const gid = ex.muscle_group_id
+      volumeMap[gid] = (volumeMap[gid] || 0) + (log.weight_kg || 0) * (log.reps_done || 0)
+    }
+    const entries = Object.entries(volumeMap).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+    return {
+      labels: entries.map(([gid]) => getMuscleGroupName(parseInt(gid))),
+      volumes: entries.map(([, v]) => Math.round(v)),
+      colors: entries.map(([gid]) => MUSCLE_COLOR_MAP[parseInt(gid)] || '#A4E44B'),
+    }
+  })()
+
+  // Weekly volume
+  const weeklyVolumeData = (() => {
+    const sessions = store.workout_sessions
+      .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
+      .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
+    if (sessions.length === 0) return { labels: [], volumes: [], sessionCounts: [] }
+    const weekMap = {}
+    for (const session of sessions) {
+      const d = new Date((session.date || session.session_date) + 'T00:00:00')
+      const year = d.getFullYear()
+      const startOfYear = new Date(year, 0, 1)
+      const weekNum = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+      const key = `${year}-W${String(weekNum).padStart(2, '0')}`
+      if (!weekMap[key]) weekMap[key] = { volume: 0, count: 0 }
+      weekMap[key].count++
+      const logs = store.session_logs.filter(l => l.session_id === session.id)
+      for (const log of logs) {
+        weekMap[key].volume += (log.weight_kg || 0) * (log.reps_done || 0)
+      }
+    }
+    const entries = Object.entries(weekMap)
+    return {
+      labels: entries.map(([k]) => `S${parseInt(k.split('-W')[1])}`),
+      volumes: entries.map(([, v]) => Math.round(v.volume)),
+      sessionCounts: entries.map(([, v]) => v.count),
+    }
+  })()
+
+  // Exercise selector grouped by muscle group
+  const exercisesByGroup = store.muscle_groups.map(group => ({
+    group,
+    exercises: store.exercises.filter(e => e.muscle_group_id === group.id),
+  })).filter(g => g.exercises.length > 0)
+
+  // ── Chart builders ──
+
+  function buildProgressionChart(ctx) {
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: progressionData.map(d => d.date),
+        datasets: [{
+          label: getExerciseName(defaultExercise),
+          data: progressionData.map(d => d.weight),
+          borderColor: '#A4E44B',
+          backgroundColor: 'rgba(164,228,75,0.1)',
+          pointBackgroundColor: '#A4E44B',
+          tension: 0.3,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: CHART_TEXT } } },
+        scales: {
+          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
+          y: { ticks: { color: CHART_TEXT, callback: v => `${v} kg` }, grid: { color: CHART_GRID } },
+        },
+      },
+    })
+  }
+
+  function buildVolumeChart(ctx) {
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: volumeData.labels,
+        datasets: [{
+          label: 'Volume total (kg×reps)',
+          data: volumeData.volumes,
+          backgroundColor: volumeData.colors,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID }, beginAtZero: true },
+          y: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
+        },
+      },
+    })
+  }
+
+  function buildWeeklyVolumeChart(ctx) {
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: weeklyVolumeData.labels,
+        datasets: [
+          {
+            label: 'Volume (kg×reps)',
+            data: weeklyVolumeData.volumes,
+            backgroundColor: '#A4E44B',
+            borderRadius: 4,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Sessões',
+            data: weeklyVolumeData.sessionCounts,
+            type: 'line',
+            borderColor: '#64c8ff',
+            backgroundColor: 'rgba(100,200,255,0.1)',
+            pointBackgroundColor: '#64c8ff',
+            tension: 0.3,
+            yAxisID: 'y1',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: CHART_TEXT } } },
+        scales: {
+          x: { ticks: { color: CHART_TEXT }, grid: { color: CHART_GRID } },
+          y: { position: 'left', ticks: { color: '#A4E44B' }, grid: { color: CHART_GRID }, beginAtZero: true },
+          y1: { position: 'right', ticks: { color: '#64c8ff', stepSize: 1 }, grid: { drawOnChartArea: false }, beginAtZero: true },
+        },
+      },
+    })
+  }
+
+  const noData = studentSessionIds.length === 0
+
+  return (
+    <div className="space-y-4">
+      {/* Time filter */}
+      <div className="flex gap-2">
+        {[30, 60, 90].map(d => (
+          <button
+            key={d}
+            onClick={() => setDays(d)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              days === d
+                ? 'bg-brand-green text-brand-dark'
+                : 'bg-brand-secondary text-brand-muted hover:text-white'
+            }`}
+          >
+            {d} dias
+          </button>
+        ))}
+      </div>
+
+      {noData ? (
+        <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
+          <p className="text-brand-muted">Nenhum treino registrado para este aluno.</p>
+        </div>
+      ) : (
+        <>
+          {/* Personal records */}
+          {prs.length > 0 && (
+            <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-white mb-3">Recordes Pessoais</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {prs.map(({ exerciseId, weight }) => (
+                  <div key={exerciseId} className="bg-brand-secondary rounded-lg px-3 py-2">
+                    <p className="text-xs text-brand-muted truncate">{getExerciseName(exerciseId)}</p>
+                    <p className="text-lg font-bold text-brand-green">{weight} kg</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Progression chart */}
+          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-white mb-3">Progressão de Carga</h3>
+            <select
+              value={defaultExercise ?? ''}
+              onChange={e => setSelectedExercise(parseInt(e.target.value))}
+              className="w-full bg-brand-secondary text-white text-sm rounded-lg px-3 py-2 mb-4 border border-brand-secondary"
+            >
+              {exercisesByGroup.map(({ group, exercises }) => (
+                <optgroup key={group.id} label={group.name}>
+                  {exercises.map(ex => (
+                    <option key={ex.id} value={ex.id}>{ex.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {progressionData.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exercício no período.</p>
+            ) : (
+              <ChartCanvas id="admin-progression" buildChart={buildProgressionChart} deps={[defaultExercise, days, progressionData.length]} />
+            )}
+          </div>
+
+          {/* Volume by muscle group */}
+          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-white mb-3">Volume por Grupo Muscular</h3>
+            {volumeData.labels.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Nenhum volume registrado no período.</p>
+            ) : (
+              <ChartCanvas id="admin-volume-group" buildChart={buildVolumeChart} deps={[days, volumeData.labels.join(',')]} />
+            )}
+          </div>
+
+          {/* Weekly volume */}
+          <div className="bg-brand-card border border-brand-secondary rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-white mb-3">Volume Semanal</h3>
+            {weeklyVolumeData.labels.length === 0 ? (
+              <p className="text-brand-muted text-sm text-center py-6">Nenhum dado de volume no período.</p>
+            ) : (
+              <ChartCanvas id="admin-weekly-volume" buildChart={buildWeeklyVolumeChart} deps={[days, weeklyVolumeData.labels.join(',')]} />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────
+
 export default function TreinosPage({ params }) {
   const students = store.users.filter((u) => u.role === 'student')
   const [selectedId, setSelectedId] = useState(() => {
@@ -643,6 +952,7 @@ export default function TreinosPage({ params }) {
     }
     return students[0]?.id ?? null
   })
+  const [tab, setTab] = useState('treinos')
 
   const selectedStudent = students.find((s) => s.id === selectedId)
 
@@ -661,7 +971,7 @@ export default function TreinosPage({ params }) {
             <label className="block text-sm text-brand-muted mb-1.5">Aluno</label>
             <select
               value={selectedId ?? ''}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => { setSelectedId(e.target.value); setTab('treinos') }}
               className="bg-brand-card border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green w-full max-w-xs"
             >
               {students.map((s) => (
@@ -675,9 +985,34 @@ export default function TreinosPage({ params }) {
           </div>
         )}
 
-        {/* Content */}
+        {/* Tabs */}
         {selectedStudent && (
+          <div className="flex gap-1 bg-brand-card border border-brand-secondary rounded-lg p-1">
+            {[
+              { key: 'treinos', label: 'Treinos' },
+              { key: 'progresso', label: 'Progresso' },
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? 'bg-brand-green text-brand-dark'
+                    : 'text-brand-muted hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Content */}
+        {selectedStudent && tab === 'treinos' && (
           <StudentTreinosContent key={selectedId} studentId={selectedId} />
+        )}
+        {selectedStudent && tab === 'progresso' && (
+          <StudentProgressContent key={selectedId + '-progress'} studentId={selectedId} />
         )}
       </div>
     </AdminLayout>

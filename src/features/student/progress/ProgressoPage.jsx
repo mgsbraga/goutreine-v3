@@ -132,9 +132,12 @@ function getFrequencyData(days, studentId) {
   return { labels, counts, colors }
 }
 
-function getVolumeByMuscleGroup(studentId) {
+function getVolumeByMuscleGroup(studentId, days) {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
   const sessionIds = store.workout_sessions
-    .filter(s => s.student_id === studentId)
+    .filter(s => s.student_id === studentId && new Date((s.date || s.session_date) + 'T00:00:00') >= since)
     .map(s => s.id)
 
   const logs = store.session_logs.filter(l => sessionIds.includes(l.session_id))
@@ -144,7 +147,7 @@ function getVolumeByMuscleGroup(studentId) {
     const ex = store.exercises.find(e => e.id === log.exercise_id)
     if (!ex) continue
     const gid = ex.muscle_group_id
-    const vol = (log.weight_kg || 0) * (log.reps || 0) * (log.sets || 1)
+    const vol = (log.weight_kg || 0) * (log.reps_done || 0)
     volumeMap[gid] = (volumeMap[gid] || 0) + vol
   }
 
@@ -236,7 +239,7 @@ export default function ProgressoPage() {
 
   const progressionData = getProgressionData(defaultExercise, days)
   const frequencyData = getFrequencyData(days, user?.id)
-  const volumeData = getVolumeByMuscleGroup(user?.id)
+  const volumeData = getVolumeByMuscleGroup(user?.id, days)
   const weeklyVolumeData = getWeeklyVolumeData(user?.id, days)
 
   // ── Chart builders ──────────────────────────────────────────────────────────
@@ -529,7 +532,7 @@ export default function ProgressoPage() {
             <ChartCanvas
               id="volume-chart"
               buildChart={buildVolumeChart}
-              deps={[volumeData.labels.join(',')]}
+              deps={[days, volumeData.labels.join(',')]}
             />
           )}
         </div>
