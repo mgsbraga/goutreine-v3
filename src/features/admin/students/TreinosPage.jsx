@@ -155,6 +155,7 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
   const [repsMin, setRepsMin] = useState(8)
   const [repsMax, setRepsMax] = useState(12)
   const [suggestedWeight, setSuggestedWeight] = useState('')
+  const [supersetGroup, setSupersetGroup] = useState('')
   const [saving, setSaving] = useState(false)
 
   const groups = store.muscle_groups.filter(g =>
@@ -163,6 +164,13 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
   const filteredExercises = selectedGroup
     ? store.exercises.filter(e => e.muscle_group_id === parseInt(selectedGroup))
     : []
+
+  // Find existing superset groups in this plan
+  const existingGroups = [...new Set(
+    store.plan_exercises
+      .filter(pe => pe.plan_id === planId && pe.superset_group != null)
+      .map(pe => pe.superset_group)
+  )].sort()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -178,6 +186,7 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
         repsMin: Number(repsMin) || 8,
         repsMax: Number(repsMax) || 12,
         suggestedWeight: Number(suggestedWeight) || 0,
+        supersetGroup: supersetGroup || null,
         phaseId,
       })
       onClose()
@@ -233,6 +242,33 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
               <input type="number" value={restSeconds} onChange={e => setRestSeconds(e.target.value)} min={0} max={300} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
             </div>
           </div>
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Conjugado (superset)</label>
+            <div className="flex gap-2">
+              <select value={supersetGroup} onChange={e => setSupersetGroup(e.target.value)} className="flex-1 bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green">
+                <option value="">Nenhum</option>
+                {existingGroups.map(g => (
+                  <option key={g} value={g}>Grupo {g}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = existingGroups.length === 0 ? 'A'
+                    : String.fromCharCode(existingGroups[existingGroups.length - 1].charCodeAt(0) + 1)
+                  setSupersetGroup(next)
+                }}
+                className="bg-yellow-400 bg-opacity-15 text-yellow-400 px-3 py-2 rounded-lg text-xs font-bold hover:bg-opacity-25 transition-colors whitespace-nowrap"
+              >
+                + Novo grupo
+              </button>
+            </div>
+            {supersetGroup && (
+              <p className="text-xs text-yellow-400 mt-1">
+                Exercícios no mesmo grupo serão executados alternadamente (bi-set / tri-set).
+              </p>
+            )}
+          </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
             <button type="submit" disabled={saving || !selectedExercise} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">{saving ? 'Adicionando...' : 'Adicionar'}</button>
@@ -251,8 +287,8 @@ function PlanEditor({ plan, onRefresh }) {
     .filter(pe => pe.plan_id === plan.id)
     .sort((a, b) => (a.order || a.exercise_order || 0) - (b.order || b.exercise_order || 0))
 
-  async function handleAddExercise({ exerciseId, restSeconds, order, sets, repsMin, repsMax, suggestedWeight, phaseId }) {
-    const newPe = await programsService.addExerciseToPlan(plan.id, { exerciseId, restSeconds, order })
+  async function handleAddExercise({ exerciseId, restSeconds, order, sets, repsMin, repsMax, suggestedWeight, supersetGroup, phaseId }) {
+    const newPe = await programsService.addExerciseToPlan(plan.id, { exerciseId, restSeconds, order, supersetGroup })
     // Create week_configs for all weeks so sets/reps/weight appear in the student's workout
     const phase = store.training_phases.find(p => p.id === (phaseId || plan.phase_id))
     const totalWeeks = phase?.total_weeks || 8
@@ -308,11 +344,16 @@ function PlanEditor({ plan, onRefresh }) {
             const groupName = ex ? getMuscleGroupName(ex.muscle_group_id) : ''
             const wc = store.week_configs.find(c => c.plan_exercise_id === pe.id && c.week === 1)
             return (
-              <div key={pe.id} className="flex items-center justify-between gap-2 bg-brand-secondary bg-opacity-40 rounded px-3 py-2">
+              <div key={pe.id} className={`flex items-center justify-between gap-2 bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${pe.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
                   <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
                   {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
+                  {pe.superset_group && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-400 bg-opacity-20 text-yellow-400 font-bold">
+                      {pe.superset_group}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {wc && (
