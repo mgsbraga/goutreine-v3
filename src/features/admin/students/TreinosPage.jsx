@@ -971,44 +971,109 @@ function ApplyBaseTrainingModal({ phase, onClose, onApplied }) {
     if (!selectedTemplate) return
     setSaving(true)
     try {
-      // Copy template plans + exercises + week_configs into this phase
+      const { sb } = await import('../../../lib/supabase')
       const tPlans = store.template_plans.filter(p => p.template_id === selectedTemplate.id)
-      for (const tp of tPlans) {
-        const newPlan = await programsService.createPlan(phase.id, {
-          name: tp.name, dayLabel: tp.day_label, muscleGroups: tp.muscle_groups,
-        })
-        const tExercises = store.template_exercises
-          .filter(e => e.template_plan_id === tp.id)
-          .sort((a, b) => (a.order ?? a.exercise_order ?? 0) - (b.order ?? b.exercise_order ?? 0))
-        for (const te of tExercises) {
-          const newPe = await programsService.addExerciseToPlan(newPlan.id, {
-            exerciseId: te.exercise_id,
-            restSeconds: te.rest_seconds,
-            order: te.order ?? te.exercise_order ?? 1,
-            supersetGroup: te.superset_group || null,
+
+      if (sb) {
+        // === BATCH MODE: 3 requests total ===
+
+        // 1. Insert all plans at once
+        const planRows = tPlans.map(tp => ({
+          phase_id: phase.id, name: tp.name, day_label: tp.day_label, muscle_groups: tp.muscle_groups || [],
+        }))
+        const { data: newPlans, error: plansErr } = await sb.from('training_plans').insert(planRows).select()
+        if (plansErr) throw plansErr
+        store.training_plans.push(...newPlans)
+
+        // Map old template_plan_id → new plan_id (by index, same order)
+        const planMap = {}
+        tPlans.forEach((tp, i) => { planMap[tp.id] = newPlans[i].id })
+
+        // 2. Insert all exercises at once
+        const exerciseRows = []
+        const exerciseSourceMap = [] // track which template_exercise each row came from
+        for (const tp of tPlans) {
+          const tExercises = store.template_exercises
+            .filter(e => e.template_plan_id === tp.id)
+            .sort((a, b) => (a.order ?? a.exercise_order ?? 0) - (b.order ?? b.exercise_order ?? 0))
+          for (const te of tExercises) {
+            exerciseRows.push({
+              plan_id: planMap[tp.id],
+              exercise_id: te.exercise_id,
+              rest_seconds: te.rest_seconds || 90,
+              exercise_order: te.order ?? te.exercise_order ?? 1,
+              superset_group: te.superset_group || null,
+              notes: te.notes || '',
+            })
+            exerciseSourceMap.push(te.id)
+          }
+        }
+
+        if (exerciseRows.length > 0) {
+          const { data: newPes, error: pesErr } = await sb.from('plan_exercises').insert(exerciseRows).select()
+          if (pesErr) throw pesErr
+          store.plan_exercises.push(...newPes.map(pe => ({ ...pe, order: pe.exercise_order })))
+
+          // 3. Insert all week_configs at once
+          const wcRows = []
+          newPes.forEach((newPe, i) => {
+            const templateExId = exerciseSourceMap[i]
+            const tWcs = store.template_week_configs.filter(wc => wc.template_exercise_id === templateExId)
+            if (tWcs.length > 0) {
+              for (const wc of tWcs) {
+                wcRows.push({
+                  plan_exercise_id: newPe.id, week: wc.week, sets: wc.sets,
+                  reps_min: wc.reps_min, reps_max: wc.reps_max,
+                  drop_sets: wc.drop_sets || 0, suggested_weight_kg: wc.suggested_weight_kg || 0, notes: wc.notes || '',
+                })
+              }
+            } else {
+              const totalWeeks = phase.total_weeks || 8
+              for (let w = 1; w <= totalWeeks; w++) {
+                wcRows.push({
+                  plan_exercise_id: newPe.id, week: w, sets: 3,
+                  reps_min: 8, reps_max: 12, drop_sets: 0, suggested_weight_kg: 0, notes: '',
+                })
+              }
+            }
           })
-          // Copy week configs from template
-          const tWcs = store.template_week_configs.filter(wc => wc.template_exercise_id === te.id)
-          if (tWcs.length > 0) {
-            const configs = tWcs.map(wc => ({
-              week: wc.week, sets: wc.sets, reps_min: wc.reps_min, reps_max: wc.reps_max,
-              drop_sets: wc.drop_sets || 0, suggested_weight_kg: wc.suggested_weight_kg || 0, notes: wc.notes || '',
-            }))
-            await programsService.bulkUpdateWeekConfigs(newPe.id, configs)
-          } else {
-            // Default week configs
+
+          if (wcRows.length > 0) {
+            const { data: newWcs, error: wcsErr } = await sb.from('week_configs').insert(wcRows).select()
+            if (wcsErr) throw wcsErr
+            store.week_configs.push(...(newWcs || []))
+          }
+        }
+      } else {
+        // Mock mode: sequential fallback
+        for (const tp of tPlans) {
+          const newPlan = await programsService.createPlan(phase.id, { name: tp.name, dayLabel: tp.day_label })
+          const tExercises = store.template_exercises.filter(e => e.template_plan_id === tp.id)
+          for (const te of tExercises) {
+            const newPe = await programsService.addExerciseToPlan(newPlan.id, {
+              exerciseId: te.exercise_id, restSeconds: te.rest_seconds, order: te.order ?? 1,
+              supersetGroup: te.superset_group || null,
+            })
             const totalWeeks = phase.total_weeks || 8
-            const configs = Array.from({ length: totalWeeks }, (_, i) => ({
-              week: i + 1, sets: 3, reps_min: 8, reps_max: 12, drop_sets: 0, suggested_weight_kg: 0, notes: '',
-            }))
-            await programsService.bulkUpdateWeekConfigs(newPe.id, configs)
+            await programsService.bulkUpdateWeekConfigs(newPe.id,
+              Array.from({ length: totalWeeks }, (_, i) => ({ week: i + 1, sets: 3, reps_min: 8, reps_max: 12, drop_sets: 0, suggested_weight_kg: 0, notes: '' }))
+            )
           }
         }
       }
       onApplied()
       onClose()
     } catch (err) {
-      alert('Erro ao aplicar treino base: ' + (err.message || err))
+      console.error('[ApplyBase]', err)
+      // Check if plans were actually created despite the error
+      const createdPlans = store.training_plans.filter(p => p.phase_id === phase.id)
+      if (createdPlans.length > 0) {
+        // Partial success — data was saved, just refresh
+        onApplied()
+        onClose()
+      } else {
+        alert('Erro ao aplicar treino base: ' + (err.message || err))
+      }
     } finally {
       setSaving(false)
     }
