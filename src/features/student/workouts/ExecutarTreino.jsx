@@ -20,13 +20,34 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
   // URL params are always strings; Supabase integer PKs are numbers — coerce once
   const planId = typeof rawPlanId === 'string' && !isNaN(rawPlanId) ? Number(rawPlanId) : rawPlanId
 
-  const [currentStepIndex, setCurrentStepIndex] = useState(0)
-  const [workoutStartTime] = useState(Date.now())
+  // Persist workout-in-progress to localStorage so data survives navigation/reload
+  const storageKey = `goutreine_wip_${planId}`
+
+  function loadWIP() {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }
+
+  function saveWIP(data) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(data))
+    } catch { /* quota exceeded — ignore */ }
+  }
+
+  function clearWIP() {
+    try { localStorage.removeItem(storageKey) } catch {}
+  }
+
+  const wip = loadWIP()
+  const [currentStepIndex, setCurrentStepIndex] = useState(wip?.stepIndex || 0)
+  const [workoutStartTime] = useState(wip?.startTime || Date.now())
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [setLogs, setSetLogs] = useState({})
-  const [dropEntries, setDropEntries] = useState({})
+  const [setLogs, setSetLogs] = useState(wip?.setLogs || {})
+  const [dropEntries, setDropEntries] = useState(wip?.dropEntries || {})
   const [showSummary, setShowSummary] = useState(false)
-  const [showOverview, setShowOverview] = useState(true)
+  const [showOverview, setShowOverview] = useState(wip ? false : true)
   const [restCountdown, setRestCountdown] = useState(0)
   const [restTotal, setRestTotal] = useState(0)
 
@@ -124,6 +145,33 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
   const prevKey = currentPlanExercise ? `${currentPlanExercise.exercise_id}-${currentSetIndex + 1}` : null
   const prevLog = prevKey ? previousLogs[prevKey] : null
   const currentDrops = logKey ? (dropEntries[logKey] || []) : []
+
+  // Persist workout-in-progress on every change
+  useEffect(() => {
+    if (Object.keys(setLogs).length > 0) {
+      saveWIP({
+        setLogs,
+        dropEntries,
+        stepIndex: currentStepIndex,
+        startTime: workoutStartTime,
+        planId,
+        userId: user?.id,
+        savedAt: Date.now(),
+      })
+    }
+  }, [setLogs, dropEntries, currentStepIndex])
+
+  // Warn before leaving with unsaved data
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (Object.keys(setLogs).length > 0 && !showSummary) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [setLogs, showSummary])
 
   // Elapsed timer
   useEffect(() => {
@@ -279,6 +327,8 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
       if (logEntries.length > 0) {
         await logSets(session.id, logEntries)
       }
+      // Success — clear work-in-progress
+      clearWIP()
     } catch (err) {
       console.error('Erro ao salvar treino:', err)
       // If error says it was saved locally, it's ok to navigate
