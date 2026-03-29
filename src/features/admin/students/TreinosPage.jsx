@@ -24,10 +24,25 @@ function StatusBadge({ status }) {
 
 function AddPhaseModal({ studentId, onSave, onClose }) {
   const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState('')
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
   const [totalWeeks, setTotalWeeks] = useState(9)
+  const [schemeId, setSchemeId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  // Merge built-in + custom schemes
+  const allSchemes = [
+    ...PERIODIZATION_SCHEMES.map(s => ({ ...s, type: 'padrao' })),
+    ...(store.custom_schemes || []).map(s => ({ ...s, type: 'custom' })),
+  ]
+
+  function handleSchemeChange(val) {
+    setSchemeId(val)
+    if (val) {
+      const scheme = allSchemes.find(s => String(s.id) + '-' + s.type === val)
+      if (scheme) setTotalWeeks(scheme.total_weeks || scheme.configs?.length || 9)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -36,28 +51,34 @@ function AddPhaseModal({ studentId, onSave, onClose }) {
     setError(null)
     setSaving(true)
     try {
-      await onSave({ name: name.trim(), startDate, totalWeeks: Number(totalWeeks) })
+      const parsedScheme = schemeId ? allSchemes.find(s => String(s.id) + '-' + s.type === schemeId) : null
+      await onSave({
+        name: name.trim(),
+        startDate,
+        totalWeeks: Number(totalWeeks),
+        schemeId: parsedScheme?.type === 'padrao' ? parsedScheme.id : null,
+      })
       onClose()
     } catch (err) {
-      setError(err.message || 'Erro ao criar fase.')
+      setError(err.message || 'Erro ao criar treino.')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-5">
-        <h2 className="text-lg font-bold">Nova Fase de Treino</h2>
+        <h2 className="text-lg font-bold">Adicionar Treino</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-brand-muted mb-1">Nome da Fase</label>
+            <label className="block text-sm text-brand-muted mb-1">Nome do Treino</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Fase 1 — Hipertrofia"
+              placeholder="Ex: Hipertrofia — Fase 1"
               autoFocus
               className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green"
             />
@@ -85,22 +106,54 @@ function AddPhaseModal({ studentId, onSave, onClose }) {
             />
           </div>
 
+          <div>
+            <label className="block text-sm text-brand-muted mb-1">Periodização</label>
+            <select
+              value={schemeId}
+              onChange={(e) => handleSchemeChange(e.target.value)}
+              className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green"
+            >
+              <option value="">Sem periodização pré-definida</option>
+              {allSchemes.length > 0 && (
+                <>
+                  <optgroup label="Padrão">
+                    {allSchemes.filter(s => s.type === 'padrao').map(s => (
+                      <option key={`p-${s.id}`} value={`${s.id}-padrao`}>
+                        {s.name} ({s.total_weeks} sem.)
+                      </option>
+                    ))}
+                  </optgroup>
+                  {allSchemes.some(s => s.type === 'custom') && (
+                    <optgroup label="Customizados">
+                      {allSchemes.filter(s => s.type === 'custom').map(s => (
+                        <option key={`c-${s.id}`} value={`${s.id}-custom`}>
+                          {s.name} ({s.total_weeks || s.configs?.length} sem.)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              )}
+            </select>
+            <p className="text-[10px] text-brand-muted mt-1">Define as fases semanais (BASE, CHOQUE, DELOAD...)</p>
+          </div>
+
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:bg-opacity-80 transition-colors"
+              className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium hover:opacity-80 transition-opacity"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+              className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
             >
-              {saving ? 'Criando...' : 'Criar Fase'}
+              {saving ? 'Criando...' : 'Adicionar'}
             </button>
           </div>
         </form>
@@ -1243,18 +1296,18 @@ function StudentTreinosContent({ studentId }) {
     store.training_phases.filter((p) => p.student_id === studentId)
   )
   const [modalOpen, setModalOpen] = useState(false)
-  const [templateModalOpen, setTemplateModalOpen] = useState(false)
 
   function refresh() {
     setPhases([...store.training_phases.filter((p) => p.student_id === studentId)])
   }
 
-  async function handleAddPhase({ name, startDate, totalWeeks }) {
+  async function handleAddPhase({ name, startDate, totalWeeks, schemeId }) {
     await programsService.createPhase(studentId, {
       name,
       startDate,
       totalWeeks,
       status: 'planned',
+      schemeId,
     })
     refresh()
   }
@@ -1270,25 +1323,24 @@ function StudentTreinosContent({ studentId }) {
         <p className="text-brand-muted text-sm">
           {phases.length} fase{phases.length !== 1 ? 's' : ''}
         </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTemplateModalOpen(true)}
-            className="flex items-center gap-2 bg-brand-card border border-brand-secondary text-white px-4 py-2 rounded-lg text-sm font-medium hover:border-brand-green transition-colors"
-          >
-            Aplicar Template
-          </button>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
-          >
-            Nova Periodização
-          </button>
-        </div>
+        <button
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Adicionar Treino
+        </button>
       </div>
 
       {sorted.length === 0 ? (
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
-          <p className="text-brand-muted">Nenhuma fase criada para este aluno.</p>
+          <p className="text-brand-muted mb-3">Nenhum treino criado para este aluno.</p>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="bg-brand-green text-brand-dark px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Adicionar Primeiro Treino
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1307,14 +1359,6 @@ function StudentTreinosContent({ studentId }) {
           studentId={studentId}
           onSave={handleAddPhase}
           onClose={() => setModalOpen(false)}
-        />
-      )}
-
-      {templateModalOpen && (
-        <ApplyFromTemplateModal
-          studentId={studentId}
-          onClose={() => setTemplateModalOpen(false)}
-          onApplied={refresh}
         />
       )}
     </div>
