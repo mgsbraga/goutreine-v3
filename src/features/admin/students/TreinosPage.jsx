@@ -377,7 +377,7 @@ function PlanEditor({ plan, onRefresh }) {
                       className={`text-[10px] font-bold px-1.5 py-1 rounded border transition-colors ${
                         isConjugated
                           ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 border-yellow-400 border-opacity-40'
-                          : 'text-white/60 border-white/20 hover:text-yellow-400 hover:border-yellow-400/40'
+                          : 'text-white text-opacity-60 border-white border-opacity-20 hover:text-yellow-400 hover:border-yellow-400 hover:border-opacity-40'
                       }`}
                       title={isConjugated ? 'Desfazer conjugado' : 'Conjugar com exercício anterior'}
                     >
