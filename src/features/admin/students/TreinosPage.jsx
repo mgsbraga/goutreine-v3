@@ -481,6 +481,9 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
     try {
       await programsService.deletePhase(phase.id)
       onRefresh()
+    } catch (err) {
+      console.error('[DeletePhase]', err)
+      alert('Erro ao excluir fase: ' + (err.message || err))
     } finally {
       setLoading(false)
     }

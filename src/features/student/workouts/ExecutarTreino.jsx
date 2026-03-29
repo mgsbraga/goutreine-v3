@@ -586,7 +586,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                           ? String(currentPlanExercise.suggested_weight_kg)
                           : '0'
                       }
-                      defaultValue={currentLogged?.weight || prevLog?.weight || ''}
+                      defaultValue={currentLogged?.weight || prevLog?.weight || currentPlanExercise.suggested_weight_kg || ''}
                       className="bg-brand-dark border border-brand-muted rounded px-4 py-3 text-white text-center text-2xl font-bold w-full focus:border-brand-green focus:outline-none transition"
                       id="weight-current"
                     />
@@ -610,7 +610,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                       type="number"
                       min={1}
                       placeholder={`${currentPlanExercise.reps_min}–${currentPlanExercise.reps_max}`}
-                      defaultValue={currentLogged?.reps || prevLog?.reps || ''}
+                      defaultValue={currentLogged?.reps || prevLog?.reps || currentPlanExercise.reps_max || currentPlanExercise.reps_min || ''}
                       className="bg-brand-dark border border-brand-muted rounded px-4 py-3 text-white text-center text-2xl font-bold w-full focus:border-brand-green focus:outline-none transition"
                       id="reps-current"
                     />
