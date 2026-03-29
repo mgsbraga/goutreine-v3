@@ -30,8 +30,12 @@ export function AuthProvider({ children }) {
       setSyncMessage(msg)
       setTimeout(() => setSyncMessage(null), 5000)
     } else if (result.failed > 0 && result.synced === 0) {
-      setSyncMessage('Falha ao sincronizar. Tente novamente.')
-      setTimeout(() => setSyncMessage(null), 5000)
+      const errorDetail = result.errors?.[0]?.error || ''
+      const msg = errorDetail
+        ? `Falha ao sincronizar: ${errorDetail.substring(0, 80)}`
+        : 'Falha ao sincronizar. Tente fazer logout e login novamente.'
+      setSyncMessage(msg)
+      setTimeout(() => setSyncMessage(null), 8000)
     }
     return result
   }, [])

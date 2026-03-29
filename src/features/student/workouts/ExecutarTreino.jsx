@@ -281,8 +281,13 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
       }
     } catch (err) {
       console.error('Erro ao salvar treino:', err)
-      alert('Erro ao salvar treino. Tente novamente ou verifique sua conexão.')
-      return
+      // If error says it was saved locally, it's ok to navigate
+      if (err.message?.includes('salvo localmente')) {
+        alert(err.message)
+      } else {
+        alert('Erro ao salvar treino: ' + (err.message || 'erro desconhecido'))
+        return
+      }
     }
     navigate('dashboard')
   }

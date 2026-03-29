@@ -24,29 +24,39 @@ export async function createSession(studentId, planId, durationMinutes, notes) {
 
   // Try Supabase first
   if (sb) {
-    try {
-      const { data, error } = await sb.from('workout_sessions')
-        .insert(sessionPayload).select().single()
-      if (error) {
-        // RLS or permission errors should NOT fall through to offline queue
-        const isRLS = error.code === '42501' || error.message?.includes('policy') || error.message?.includes('permission')
-        const isAuthError = error.code === 'PGRST301' || error.message?.includes('JWT')
-        if (isRLS || isAuthError) {
-          console.error('[createSession] Erro de permissão:', error.message)
-          throw new Error('Sem permissão para salvar treino. Tente fazer logout e login novamente.')
+    const isOnline = navigator.onLine !== false
+    if (isOnline) {
+      try {
+        const { data, error } = await sb.from('workout_sessions')
+          .insert(sessionPayload).select().single()
+        if (error) {
+          console.error('[createSession] Supabase error:', error.code, error.message, error.details)
+          throw error
         }
-        throw error
+        const cached = { ...data, date: data.session_date || data.date }
+        store.workout_sessions.unshift(cached)
+        return cached
+      } catch (err) {
+        // If we're online and it failed, it's a real error — don't silently swallow
+        const isNetworkError = !navigator.onLine ||
+          err.message?.includes('Failed to fetch') ||
+          err.message?.includes('NetworkError') ||
+          err.message?.includes('ERR_INTERNET_DISCONNECTED')
+
+        if (isNetworkError) {
+          console.warn('[Offline] createSession — sem rede, enfileirando')
+          // Fall through to offline queue below
+        } else {
+          // Real Supabase error (RLS, FK, validation, etc.)
+          // Still save to offline queue so data isn't lost, but also notify the user
+          console.error('[createSession] Erro real do Supabase:', err.message)
+          const localSession = { id: tempId, ...sessionPayload, date: today, _error: err.message }
+          store.workout_sessions.unshift(localSession)
+          queueOfflineWrite({ type: 'create_session', tempId, payload: sessionPayload, errorMsg: err.message })
+          // Throw so the UI can show the error, but data is safe in the queue
+          throw new Error(`Erro ao salvar no servidor: ${err.message || err.code || 'erro desconhecido'}. O treino foi salvo localmente e será sincronizado depois.`)
+        }
       }
-      const cached = { ...data, date: data.session_date || data.date }
-      store.workout_sessions.unshift(cached)
-      return cached
-    } catch (err) {
-      // Only fall through to offline if it's a network error
-      if (err.message?.includes('permissão') || err.message?.includes('permission') || err.message?.includes('policy')) {
-        throw err // Propagate to UI
-      }
-      console.warn('[Offline] createSession falhou (rede), enfileirando:', err.message)
-      // Fall through to offline queue
     }
   }
 
@@ -60,16 +70,27 @@ export async function createSession(studentId, planId, durationMinutes, notes) {
 export async function logSets(sessionId, logs) {
   const isTemp = typeof sessionId === 'string' && sessionId.startsWith('_temp_')
 
-  // Try Supabase first (only if session has a real ID)
-  if (sb && !isTemp) {
+  // Try Supabase first (only if session has a real ID and we're online)
+  if (sb && !isTemp && navigator.onLine !== false) {
     try {
       const rows = logs.map((log) => ({ session_id: sessionId, ...log }))
       const { data, error } = await sb.from('session_logs').insert(rows).select()
-      if (error) throw error
+      if (error) {
+        console.error('[logSets] Supabase error:', error.code, error.message)
+        throw error
+      }
       store.session_logs.push(...(data || []))
       return data
     } catch (err) {
-      console.warn('[Offline] logSets falhou, enfileirando:', err.message)
+      const isNetworkError = !navigator.onLine ||
+        err.message?.includes('Failed to fetch') ||
+        err.message?.includes('NetworkError')
+
+      if (!isNetworkError) {
+        console.error('[logSets] Erro real:', err.message)
+        // Still save offline so data isn't lost
+      }
+      console.warn('[Offline] logSets enfileirado')
       // Fall through to offline queue
     }
   }
@@ -89,10 +110,10 @@ export async function logSets(sessionId, logs) {
 // ─── Sync offline queue to Supabase ──────────────────────────────────────────
 
 export async function syncOfflineQueue() {
-  if (!sb) return { synced: 0, failed: 0 }
+  if (!sb) return { synced: 0, failed: 0, errors: [] }
 
   const queue = getOfflineQueue()
-  if (queue.length === 0) return { synced: 0, failed: 0 }
+  if (queue.length === 0) return { synced: 0, failed: 0, errors: [] }
 
   console.log(`[Sync] Sincronizando ${queue.length} operações pendentes...`)
 
@@ -101,6 +122,7 @@ export async function syncOfflineQueue() {
   let synced = 0
   let failed = 0
   const remaining = []
+  const errors = []
 
   for (const item of queue) {
     try {
@@ -135,14 +157,15 @@ export async function syncOfflineQueue() {
       }
     } catch (err) {
       console.error('[Sync] Erro ao sincronizar:', item.type, err.message)
+      errors.push({ type: item.type, error: err.message })
       remaining.push(item)
       failed++
     }
   }
 
   saveOfflineQueue(remaining)
-  console.log(`[Sync] Concluído: ${synced} sincronizados, ${failed} falharam`)
-  return { synced, failed }
+  console.log(`[Sync] Concluído: ${synced} sincronizados, ${failed} falharam`, errors)
+  return { synced, failed, errors }
 }
 
 export async function getSessionsByStudent(studentId, { days } = {}) {
