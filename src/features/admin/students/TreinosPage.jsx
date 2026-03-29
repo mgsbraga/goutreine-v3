@@ -299,6 +299,25 @@ function PlanEditor({ plan, onRefresh }) {
     onRefresh()
   }
 
+  async function handleMoveExercise(pe, direction) {
+    const sorted = [...exercises]
+    const idx = sorted.findIndex(e => e.id === pe.id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= sorted.length) return
+    const other = sorted[swapIdx]
+    const peOrder = pe.order || pe.exercise_order || idx + 1
+    const otherOrder = other.order || other.exercise_order || swapIdx + 1
+    if (sb) {
+      await sb.from('plan_exercises').update({ exercise_order: otherOrder }).eq('id', pe.id)
+      await sb.from('plan_exercises').update({ exercise_order: peOrder }).eq('id', other.id)
+    }
+    pe.order = otherOrder
+    pe.exercise_order = otherOrder
+    other.order = peOrder
+    other.exercise_order = peOrder
+    onRefresh()
+  }
+
   async function handleRemoveExercise(peId) {
     setRemoving(peId)
     try {
@@ -340,47 +359,60 @@ function PlanEditor({ plan, onRefresh }) {
             const prevPe = idx > 0 ? exercises[idx - 1] : null
             const isConjugated = pe.superset_group && prevPe?.superset_group === pe.superset_group
             return (
-              <div key={pe.id}>
-                {/* Conjugate toggle button between exercises */}
-                {idx > 0 && (
-                  <button
-                    onClick={() => handleToggleConjugado(pe, prevPe)}
-                    className={`w-full flex items-center justify-center gap-1 py-0.5 text-[10px] font-bold rounded transition-colors my-0.5 ${
-                      isConjugated
-                        ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 hover:bg-opacity-30'
-                        : 'text-brand-muted hover:text-yellow-400 hover:bg-yellow-400 hover:bg-opacity-10'
-                    }`}
-                  >
-                    {isConjugated ? '⇄ Conjugado — clique para desfazer' : '⇄ Conjugar com anterior'}
-                  </button>
-                )}
-                <div className={`flex items-center justify-between gap-2 bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${pe.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
-                    <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
-                    {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
-                    {pe.superset_group && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-400 bg-opacity-20 text-yellow-400 font-bold">
-                        {pe.superset_group}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {wc && (
-                      <span className="text-xs text-brand-green font-medium">
-                        {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}
-                        {wc.suggested_weight_kg > 0 && ` · ${wc.suggested_weight_kg}kg`}
-                      </span>
-                    )}
-                    <span className="text-xs text-brand-muted">{pe.rest_seconds || 90}s</span>
+              <div key={pe.id} className={`flex items-center justify-between gap-2 bg-brand-secondary bg-opacity-40 rounded px-3 py-2 ${pe.superset_group ? 'border-l-2 border-yellow-400' : ''}`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs text-brand-muted w-5 shrink-0">{idx + 1}.</span>
+                  <span className="text-sm text-white truncate">{ex?.name || getExerciseName(pe.exercise_id)}</span>
+                  {groupName && <span className={`muscle-badge text-[10px] ${groupColor}`}>{groupName}</span>}
+                  {wc && (
+                    <span className="text-xs text-brand-green font-medium whitespace-nowrap">
+                      {wc.sets}×{wc.reps_min}{wc.reps_max !== wc.reps_min ? `–${wc.reps_max}` : ''}
+                      {wc.suggested_weight_kg > 0 && ` · ${wc.suggested_weight_kg}kg`}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Conj button */}
+                  {idx > 0 && (
                     <button
-                      onClick={() => handleRemoveExercise(pe.id)}
-                      disabled={removing === pe.id}
-                      className="text-red-400 hover:text-red-300 text-xs disabled:opacity-50"
+                      onClick={() => handleToggleConjugado(pe, prevPe)}
+                      className={`text-[10px] font-bold px-1.5 py-1 rounded border transition-colors ${
+                        isConjugated
+                          ? 'bg-yellow-400 bg-opacity-20 text-yellow-400 border-yellow-400 border-opacity-40'
+                          : 'text-brand-muted border-brand-secondary hover:text-yellow-400 hover:border-yellow-400 hover:border-opacity-40'
+                      }`}
+                      title={isConjugated ? 'Desfazer conjugado' : 'Conjugar com exercício anterior'}
                     >
-                      ✕
+                      Conj
                     </button>
-                  </div>
+                  )}
+                  {/* Move up */}
+                  <button
+                    onClick={() => handleMoveExercise(pe, 'up')}
+                    disabled={idx === 0}
+                    className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
+                    title="Mover para cima"
+                  >
+                    ▲
+                  </button>
+                  {/* Move down */}
+                  <button
+                    onClick={() => handleMoveExercise(pe, 'down')}
+                    disabled={idx === exercises.length - 1}
+                    className="text-brand-muted hover:text-white text-xs px-1 py-1 disabled:opacity-30 transition-colors"
+                    title="Mover para baixo"
+                  >
+                    ▼
+                  </button>
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleRemoveExercise(pe.id)}
+                    disabled={removing === pe.id}
+                    className="text-red-400 hover:text-red-300 text-sm px-1 py-1 disabled:opacity-50 transition-colors"
+                    title="Remover exercício"
+                  >
+                    🗑
+                  </button>
                 </div>
               </div>
             )
