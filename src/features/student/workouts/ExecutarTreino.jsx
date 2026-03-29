@@ -394,8 +394,8 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
             <h1 className="text-2xl font-bold">{getPlanName(planId)}</h1>
             <div className="flex items-center gap-2">
               <p className="text-brand-muted text-sm">{formatTime(elapsedSeconds)}</p>
-              <span className="text-xs px-2 py-0.5 rounded bg-brand-green bg-opacity-20 text-brand-green font-medium">
-                Sem {currentWeek}/{totalWeeks}
+              <span className="text-xs px-2 py-0.5 rounded bg-brand-card border border-brand-secondary text-white font-medium">
+                Sem <span className="text-brand-green">{currentWeek}</span>/{totalWeeks}
               </span>
             </div>
           </div>
@@ -468,7 +468,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                     }}
                     className={`w-full text-left flex items-center gap-3 rounded-lg p-2.5 transition ${
                       isActive
-                        ? 'bg-brand-green bg-opacity-15 border border-brand-green border-opacity-40'
+                        ? 'bg-brand-secondary bg-opacity-50 border-l-3 border-brand-green'
                         : allDone
                         ? 'bg-brand-secondary bg-opacity-30 opacity-60'
                         : 'hover:bg-brand-secondary hover:bg-opacity-30'
