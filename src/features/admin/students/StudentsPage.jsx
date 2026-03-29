@@ -61,7 +61,7 @@ function StudentCard({ student }) {
             </span>
           ) : (
             <span className="inline-flex items-center bg-brand-secondary text-brand-muted px-2 py-0.5 rounded-full text-[11px]">
-              Sem fase ativa
+              Sem treino ativo
             </span>
           )}
           <span className="text-[11px] text-brand-muted">{workout.text}</span>
