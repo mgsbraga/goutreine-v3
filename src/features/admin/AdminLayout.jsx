@@ -6,7 +6,6 @@ import {
   IconHistory,
   IconDumbbell,
   IconTrendingUp,
-  IconSchemes,
   IconLogout,
   IconMenu,
   IconClose,
@@ -17,7 +16,6 @@ const navLinks = [
   { label: 'Alunos',       href: '#/admin/alunos',      Icon: IconHistory },
   { label: 'Exercícios',   href: '#/admin/exercicios',  Icon: IconDumbbell },
   { label: 'Periodização', href: '#/admin/templates',   Icon: IconTrendingUp },
-  { label: 'Esquemas',     href: '#/admin/esquemas',    Icon: IconSchemes },
 ]
 
 function isNavActive(href) {

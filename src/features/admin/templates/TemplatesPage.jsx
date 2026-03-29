@@ -5,6 +5,7 @@ import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
 import { getMuscleGroupColor, getMuscleGroupName } from '../../../shared/utils/muscle-groups'
 import { IconPlus } from '../../../shared/components/icons'
+import { SchemesContent } from '../schemes/SchemesPage'
 import AdminLayout from '../AdminLayout'
 
 function AddTemplateModal({ onSave, onClose }) {
@@ -634,17 +635,11 @@ function TemplateCard({ template, onDelete, onRefresh }) {
   )
 }
 
-export default function TemplatesPage() {
+function TemplatesContent({ onOpenModal }) {
   const [templates, setTemplates] = useState([...store.templates])
-  const [modalOpen, setModalOpen] = useState(false)
 
   function refresh() {
     setTemplates([...store.templates])
-  }
-
-  async function handleCreate({ name, description, totalWeeks, schemeId }) {
-    await templatesService.createTemplate({ name, description, totalWeeks, schemeId })
-    refresh()
   }
 
   async function handleDelete(id) {
@@ -652,43 +647,89 @@ export default function TemplatesPage() {
     refresh()
   }
 
+  if (templates.length === 0) {
+    return (
+      <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
+        <p className="text-brand-muted mb-4">Nenhum template criado ainda.</p>
+        <button
+          onClick={onOpenModal}
+          className="bg-brand-green text-brand-dark px-5 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
+        >
+          Criar Primeiro Template
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {templates.map((template) => (
+        <TemplateCard key={template.id} template={template} onDelete={handleDelete} onRefresh={refresh} />
+      ))}
+    </div>
+  )
+}
+
+export default function TemplatesPage() {
+  const [tab, setTab] = useState('templates')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  async function handleCreate({ name, description, totalWeeks, schemeId }) {
+    await templatesService.createTemplate({ name, description, totalWeeks, schemeId })
+    setRefreshKey(k => k + 1)
+  }
+
   return (
     <AdminLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="p-6 max-w-4xl mx-auto space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Periodização</h1>
-            <p className="text-brand-muted text-sm mt-1">
-              {templates.length} template{templates.length !== 1 ? 's' : ''} disponíve{templates.length !== 1 ? 'is' : 'l'}
-            </p>
+            <p className="text-brand-muted text-sm mt-1">Templates e esquemas de periodização</p>
           </div>
+          {tab === 'templates' && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors shrink-0"
+            >
+              <IconPlus />
+              Novo Template
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 bg-brand-card border border-brand-secondary rounded-lg p-1">
           <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors shrink-0"
+            onClick={() => setTab('templates')}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+              tab === 'templates'
+                ? 'bg-brand-green text-brand-dark font-semibold'
+                : 'text-brand-muted hover:text-white'
+            }`}
           >
-            <IconPlus />
-            Novo Template
+            Templates
+          </button>
+          <button
+            onClick={() => setTab('esquemas')}
+            className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+              tab === 'esquemas'
+                ? 'bg-brand-green text-brand-dark font-semibold'
+                : 'text-brand-muted hover:text-white'
+            }`}
+          >
+            Esquemas
           </button>
         </div>
 
-        {/* Template list */}
-        {templates.length === 0 ? (
-          <div className="bg-brand-card border border-brand-secondary rounded-xl p-8 text-center">
-            <p className="text-brand-muted mb-4">Nenhum template criado ainda.</p>
-            <button
-              onClick={() => setModalOpen(true)}
-              className="bg-brand-green text-brand-dark px-5 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
-            >
-              Criar Primeiro Template
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {templates.map((template) => (
-              <TemplateCard key={template.id} template={template} onDelete={handleDelete} onRefresh={refresh} />
-            ))}
-          </div>
+        {/* Tab content */}
+        {tab === 'templates' && (
+          <TemplatesContent key={refreshKey} onOpenModal={() => setModalOpen(true)} />
+        )}
+        {tab === 'esquemas' && (
+          <SchemesContent />
         )}
       </div>
 

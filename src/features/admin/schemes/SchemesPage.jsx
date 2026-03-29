@@ -217,7 +217,7 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
   )
 }
 
-function SchemesContent() {
+export function SchemesContent() {
   const [filter, setFilter] = useState('all')
   const [schemes, setSchemes] = useState([])
   const [builderOpen, setBuilderOpen] = useState(false)
@@ -275,17 +275,14 @@ function SchemesContent() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Esquemas de Periodização</h1>
-          <p className="text-brand-muted text-sm mt-1">Biblioteca de esquemas reutilizáveis para aplicar ao criar periodizações</p>
-        </div>
+        <p className="text-brand-muted text-sm">Esquemas reutilizáveis para aplicar ao criar periodizações</p>
         <button
           onClick={() => { setEditingScheme(null); setBuilderOpen(true) }}
-          className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity shrink-0"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
           Novo Esquema
         </button>
       </div>

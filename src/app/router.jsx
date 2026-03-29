@@ -14,7 +14,6 @@ const AdminStudentsPage = lazy(() => import('../features/admin/students/Students
 const AdminTreinosPage = lazy(() => import('../features/admin/students/TreinosPage'))
 const AdminExercisesPage = lazy(() => import('../features/admin/exercises/ExercisesPage'))
 const AdminTemplatesPage = lazy(() => import('../features/admin/templates/TemplatesPage'))
-const AdminSchemesPage = lazy(() => import('../features/admin/schemes/SchemesPage'))
 const ResetPasswordPage = lazy(() => import('../features/auth/ResetPasswordPage'))
 
 function useHashRoute() {
@@ -110,7 +109,6 @@ export function Router() {
         {route === 'admin/treinos' && <AdminTreinosPage params={params} />}
         {route === 'admin/exercicios' && <AdminExercisesPage />}
         {route === 'admin/templates' && <AdminTemplatesPage />}
-        {route === 'admin/esquemas' && <AdminSchemesPage />}
       </Suspense>
     </>
   )
