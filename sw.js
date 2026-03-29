@@ -1,24 +1,23 @@
-// Goutreine PWA Service Worker v4.1
-// Estratégia: Network-first para HTML, Cache-first para CDNs, Network-first para API
-// VERSÃO: 2026-03-23-a (mudar este valor força reinstalação do SW)
+// Goutreine PWA Service Worker v5.0
+// Estratégia: Network-first para tudo exceto CDNs imutáveis
+// VERSÃO: 2026-03-29-b (mudar este valor força reinstalação do SW)
 
-const CACHE_NAME = 'goutreine-v4-cache-v5';
-const DATA_CACHE_NAME = 'goutreine-v4-data-v2';
+const SW_VERSION = '5.0';
+const CACHE_NAME = 'goutreine-v5-cache-v1';
+const DATA_CACHE_NAME = 'goutreine-v5-data-v1';
 
 // Assets essenciais pré-cacheados
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/public/icons/icon-192x192.png',
-  '/public/icons/icon-512x512.png',
 ];
 
 // ============================================
 // INSTALL — skipWaiting imediato
 // ============================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v4.1...');
+  console.log(`[SW] Installing v${SW_VERSION}...`);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_ASSETS))
@@ -33,7 +32,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE — Limpar TODOS os caches antigos + tomar controle
 // ============================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v4.1...');
+  console.log(`[SW] Activating v${SW_VERSION}...`);
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -61,30 +60,10 @@ self.addEventListener('fetch', (event) => {
   // Ignorar requests não-GET
   if (request.method !== 'GET') return;
 
-  // --- Supabase API: Network-first com fallback ao cache ---
+  // --- Supabase API: Network-only (nunca cachear) ---
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const cloned = response.clone();
-          caches.open(DATA_CACHE_NAME).then((cache) => {
-            cache.put(request, cloned);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request).then((cached) => {
-            if (cached) {
-              console.log(`[SW] Serving Supabase from cache: ${url.pathname}`);
-              return cached;
-            }
-            return new Response(
-              JSON.stringify({ error: 'offline', message: 'Você está offline. Dados podem estar desatualizados.' }),
-              { headers: { 'Content-Type': 'application/json' }, status: 503 }
-            );
-          });
-        })
-    );
+    // Don't intercept Supabase calls — let them go directly to network
+    // This prevents stale cached responses from masking errors
     return;
   }
 
@@ -108,19 +87,37 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- Navegação (HTML): NETWORK-FIRST ---
-  // Isso garante que o app sempre busca a versão mais recente do index.html
-  if (request.mode === 'navigate') {
+  // --- Vite hashed assets (*.js, *.css with hash in filename): Network-first ---
+  // These have content hashes so URLs change on each build
+  if (url.origin === self.location.origin &&
+      url.pathname.startsWith('/assets/') &&
+      /\.[a-f0-9]{8,}\.(js|css)$/i.test(url.pathname)) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cachear a versão nova para uso offline
           const cloned = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
           return response;
         })
         .catch(() => {
-          // Offline: servir do cache
+          return caches.match(request).then((cached) => {
+            return cached || new Response('Offline', { status: 503 });
+          });
+        })
+    );
+    return;
+  }
+
+  // --- Navegação (HTML): NETWORK-FIRST ---
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+          return response;
+        })
+        .catch(() => {
           return caches.match(request).then((cached) => {
             return cached || caches.match('/index.html');
           });
@@ -129,20 +126,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- Outros assets locais (imagens, manifest): Cache-first ---
+  // --- Outros assets locais (imagens, manifest): Network-first com cache fallback ---
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok && url.origin === self.location.origin) {
           const cloned = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
         }
         return response;
-      }).catch(() => {
-        return new Response('Offline', { status: 503 });
-      });
-    })
+      })
+      .catch(() => {
+        return caches.match(request).then((cached) => {
+          return cached || new Response('Offline', { status: 503 });
+        });
+      })
   );
 });
 
@@ -157,5 +155,8 @@ self.addEventListener('message', (event) => {
     caches.keys().then((names) => {
       names.forEach((name) => caches.delete(name));
     });
+  }
+  if (event.data === 'getVersion') {
+    event.source.postMessage({ type: 'SW_VERSION', version: SW_VERSION });
   }
 });

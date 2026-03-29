@@ -19,16 +19,18 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       console.log('[SW] Registrado:', reg.scope)
 
-      // Check for updates — prompts user instead of requiring PWA reinstall
+      // Force check for updates every time the app loads
+      reg.update().catch(() => {})
+
+      // Check for updates — auto-activate new SW
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              if (confirm('Nova versão disponível! Atualizar agora?')) {
-                newWorker.postMessage({ type: 'skipWaiting' })
-                window.location.reload()
-              }
+              // Auto-activate new version without asking
+              newWorker.postMessage('skipWaiting')
+              window.location.reload()
             }
           })
         }
@@ -36,5 +38,10 @@ if ('serviceWorker' in navigator) {
     }).catch((err) => {
       console.error('[SW] Erro no registro:', err)
     })
+  })
+
+  // Listen for SW controller change (when new SW takes over)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    console.log('[SW] Nova versão ativada')
   })
 }
