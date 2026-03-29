@@ -513,7 +513,7 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
               <button
                 onClick={handleActivate}
                 disabled={loading}
-                className="text-xs bg-brand-green bg-opacity-15 text-brand-green border border-brand-green border-opacity-30 px-3 py-1.5 rounded-lg font-medium hover:bg-opacity-25 transition-colors disabled:opacity-50"
+                className="text-xs bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg font-semibold hover:bg-opacity-90 transition-colors disabled:opacity-50"
               >
                 Ativar
               </button>
