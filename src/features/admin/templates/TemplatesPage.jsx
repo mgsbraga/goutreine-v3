@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { store } from '../../../shared/constants/store'
 import * as templatesService from '../../../services/templates'
+import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
 import { getMuscleGroupColor, getMuscleGroupName } from '../../../shared/utils/muscle-groups'
 import { IconPlus } from '../../../shared/components/icons'
@@ -449,10 +450,98 @@ function TemplatePlanEditor({ plan, template, onRefresh }) {
   )
 }
 
+function ApplyTemplateModal({ template, onClose, onApplied }) {
+  const [selectedStudents, setSelectedStudents] = useState([])
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const students = store.users.filter(u => u.role === 'student')
+  const filtered = search
+    ? students.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase()))
+    : students
+
+  function toggleStudent(id) {
+    setSelectedStudents(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function handleApply() {
+    if (selectedStudents.length === 0) return
+    setSaving(true)
+    try {
+      for (const studentId of selectedStudents) {
+        await programsService.applyTemplateToStudent(template.id, studentId, {
+          name: template.name,
+          startDate,
+        })
+      }
+      onApplied()
+      onClose()
+    } catch (err) {
+      alert('Erro ao aplicar template: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Aplicar "{template.name}"</h2>
+
+        <div>
+          <label className="block text-sm text-brand-muted mb-1">Data de início</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+        </div>
+
+        <div>
+          <label className="block text-sm text-brand-muted mb-1">Selecionar aluno(s)</label>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar aluno..." className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green mb-2" />
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {filtered.map(s => {
+              const selected = selectedStudents.includes(s.id)
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => toggleStudent(s.id)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    selected ? 'bg-brand-green bg-opacity-15 border border-brand-green border-opacity-40' : 'bg-brand-dark hover:bg-brand-secondary'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded flex items-center justify-center border text-xs ${
+                    selected ? 'bg-brand-green border-brand-green text-brand-dark font-bold' : 'border-brand-secondary'
+                  }`}>
+                    {selected && '✓'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white truncate">{s.name}</p>
+                    <p className="text-brand-muted text-xs truncate">{s.email}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          {selectedStudents.length > 0 && (
+            <p className="text-xs text-brand-green mt-2">{selectedStudents.length} aluno{selectedStudents.length !== 1 ? 's' : ''} selecionado{selectedStudents.length !== 1 ? 's' : ''}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+          <button onClick={handleApply} disabled={saving || selectedStudents.length === 0} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">
+            {saving ? 'Aplicando...' : `Aplicar${selectedStudents.length > 0 ? ` (${selectedStudents.length})` : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TemplateCard({ template, onDelete, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showAddPlan, setShowAddPlan] = useState(false)
+  const [showApply, setShowApply] = useState(false)
 
   const plans = store.template_plans.filter((p) => p.template_id === template.id)
 
@@ -496,6 +585,12 @@ function TemplateCard({ template, onDelete, onRefresh }) {
 
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setShowApply(true)}
+              className="text-xs bg-brand-green text-brand-dark px-3 py-1.5 rounded-lg font-semibold hover:bg-opacity-90 transition-colors"
+            >
+              Aplicar
+            </button>
+            <button
               onClick={() => setExpanded((v) => !v)}
               className="text-brand-muted hover:text-white transition-colors text-sm px-2 py-1.5"
             >
@@ -530,6 +625,10 @@ function TemplateCard({ template, onDelete, onRefresh }) {
             <AddPlanModal onSave={handleAddPlan} onClose={() => setShowAddPlan(false)} />
           )}
         </div>
+      )}
+
+      {showApply && (
+        <ApplyTemplateModal template={template} onClose={() => setShowApply(false)} onApplied={onRefresh} />
       )}
     </div>
   )

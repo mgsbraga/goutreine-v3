@@ -871,11 +871,81 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
   )
 }
 
+function ApplyFromTemplateModal({ studentId, onClose, onApplied }) {
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [saving, setSaving] = useState(false)
+
+  const templates = store.templates
+
+  async function handleApply() {
+    if (!selectedTemplate) return
+    setSaving(true)
+    try {
+      await programsService.applyTemplateToStudent(selectedTemplate.id, studentId, {
+        name: selectedTemplate.name,
+        startDate,
+      })
+      onApplied()
+      onClose()
+    } catch (err) {
+      alert('Erro ao aplicar template: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 px-4">
+      <div className="bg-brand-card border border-brand-secondary rounded-xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Aplicar Template</h2>
+
+        <div>
+          <label className="block text-sm text-brand-muted mb-1">Template</label>
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {templates.length === 0 ? (
+              <p className="text-xs text-brand-muted py-4 text-center">Nenhum template disponível.</p>
+            ) : templates.map(t => {
+              const plans = store.template_plans.filter(p => p.template_id === t.id)
+              const isSelected = selectedTemplate?.id === t.id
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedTemplate(t)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                    isSelected ? 'bg-brand-green bg-opacity-15 border border-brand-green border-opacity-40' : 'bg-brand-dark hover:bg-brand-secondary'
+                  }`}
+                >
+                  <p className="text-white font-medium">{t.name}</p>
+                  <p className="text-brand-muted text-xs">{t.total_weeks} sem · {plans.length} treino{plans.length !== 1 ? 's' : ''}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-brand-muted mb-1">Data de início</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-green" />
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 bg-brand-secondary text-white rounded-lg py-2 text-sm font-medium">Cancelar</button>
+          <button onClick={handleApply} disabled={saving || !selectedTemplate} className="flex-1 bg-brand-green text-brand-dark rounded-lg py-2 text-sm font-semibold disabled:opacity-60">
+            {saving ? 'Aplicando...' : 'Aplicar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function StudentTreinosContent({ studentId }) {
   const [phases, setPhases] = useState(() =>
     store.training_phases.filter((p) => p.student_id === studentId)
   )
   const [modalOpen, setModalOpen] = useState(false)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
 
   function refresh() {
     setPhases([...store.training_phases.filter((p) => p.student_id === studentId)])
@@ -902,12 +972,20 @@ function StudentTreinosContent({ studentId }) {
         <p className="text-brand-muted text-sm">
           {phases.length} fase{phases.length !== 1 ? 's' : ''}
         </p>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
-        >
-          + Nova Fase
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTemplateModalOpen(true)}
+            className="flex items-center gap-2 bg-brand-card border border-brand-secondary text-white px-4 py-2 rounded-lg text-sm font-medium hover:border-brand-green transition-colors"
+          >
+            De Template
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 bg-brand-green text-brand-dark px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transition-colors"
+          >
+            + Nova Fase
+          </button>
+        </div>
       </div>
 
       {sorted.length === 0 ? (
@@ -931,6 +1009,14 @@ function StudentTreinosContent({ studentId }) {
           studentId={studentId}
           onSave={handleAddPhase}
           onClose={() => setModalOpen(false)}
+        />
+      )}
+
+      {templateModalOpen && (
+        <ApplyFromTemplateModal
+          studentId={studentId}
+          onClose={() => setTemplateModalOpen(false)}
+          onApplied={refresh}
         />
       )}
     </div>

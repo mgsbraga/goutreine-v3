@@ -200,6 +200,7 @@ export async function applyTemplateToStudent(templateId, studentId, { name, star
         const { data: newPe, error: peErr } = await sb.from('plan_exercises').insert({
           plan_id: newPlan.id, exercise_id: te.exercise_id,
           rest_seconds: te.rest_seconds, notes: te.notes, exercise_order: te.order,
+          superset_group: te.superset_group || null,
         }).select().single()
         if (peErr) throw peErr
         store.plan_exercises.push({ ...newPe, order: newPe.exercise_order || te.order })
@@ -241,6 +242,7 @@ export async function applyTemplateToStudent(templateId, studentId, { name, star
       store.plan_exercises.push({
         id: newPeId, plan_id: newPlanId, exercise_id: te.exercise_id,
         rest_seconds: te.rest_seconds, notes: te.notes, order: te.order,
+        superset_group: te.superset_group || null,
       })
       const tWeekConfigs = store.template_week_configs.filter((wc) => wc.template_exercise_id === te.id)
       tWeekConfigs.forEach((twc) => {
