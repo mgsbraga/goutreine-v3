@@ -974,6 +974,13 @@ function ApplyBaseTrainingModal({ phase, onClose, onApplied }) {
       const { sb } = await import('../../../lib/supabase')
       const tPlans = store.template_plans.filter(p => p.template_id === selectedTemplate.id)
 
+      // If template has more weeks than the program, update the program
+      const templateWeeks = selectedTemplate.total_weeks || 0
+      if (templateWeeks > (phase.total_weeks || 0)) {
+        await programsService.updatePhase(phase.id, { total_weeks: templateWeeks })
+        phase.total_weeks = templateWeeks
+      }
+
       if (sb) {
         // === BATCH MODE: 3 requests total ===
 
