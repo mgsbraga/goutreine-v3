@@ -58,11 +58,15 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
         phase: c.phase || 'BASE',
         color: c.phase_color || phaseColor(c.phase || 'BASE'),
         desc: c.description || '',
+        sets: c.sets ?? 3,
+        repsMin: c.reps_min ?? 8,
+        repsMax: c.reps_max ?? 12,
+        dropSets: c.drop_sets ?? 0,
       }))
     }
     return Array.from({ length: 8 }, (_, i) => {
       const preset = PHASE_PRESETS[i % PHASE_PRESETS.length]
-      return { phase: preset.name, color: preset.color, desc: '' }
+      return { phase: preset.name, color: preset.color, desc: '', sets: 3, repsMin: 8, repsMax: 12, dropSets: 0 }
     })
   })
   const [saving, setSaving] = useState(false)
@@ -74,7 +78,7 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
       const next = [...prev]
       while (next.length < n) {
         const preset = PHASE_PRESETS[next.length % PHASE_PRESETS.length]
-        next.push({ phase: preset.name, color: preset.color, desc: '' })
+        next.push({ phase: preset.name, color: preset.color, desc: '', sets: 3, repsMin: 8, repsMax: 12, dropSets: 0 })
       }
       return next.slice(0, n)
     })
@@ -97,6 +101,14 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
     })
   }
 
+  function updateWeekField(i, field, value) {
+    setWeeks(prev => {
+      const next = [...prev]
+      next[i] = { ...next[i], [field]: value }
+      return next
+    })
+  }
+
   async function handleSave() {
     if (!name.trim()) return
     setSaving(true)
@@ -106,10 +118,10 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
         phase: w.phase,
         phase_color: w.color,
         description: w.desc,
-        sets: 3,
-        reps_min: 8,
-        reps_max: 12,
-        drop_sets: 0,
+        sets: Number(w.sets) || 3,
+        reps_min: Number(w.repsMin) || 8,
+        reps_max: Number(w.repsMax) || 12,
+        drop_sets: Number(w.dropSets) || 0,
       }))
       await onSave({ name: name.trim(), totalWeeks: weekCount, configs })
       onClose()
@@ -158,7 +170,7 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
         {/* Week rows */}
         <div className="space-y-1 mb-4">
           {weeks.map((w, i) => (
-            <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors">
+            <div key={i} className="flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-white/[0.02] transition-colors">
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
                 style={{ background: w.color + '20', color: w.color }}
@@ -168,18 +180,43 @@ function SchemeBuilder({ scheme, onSave, onClose }) {
               <select
                 value={w.phase}
                 onChange={e => updateWeekPhase(i, e.target.value)}
-                className="flex-1 bg-brand-dark border border-brand-secondary rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-green cursor-pointer"
+                className="w-[100px] bg-brand-dark border border-brand-secondary rounded-lg px-1.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-brand-green cursor-pointer shrink-0"
               >
                 {PHASE_PRESETS.map(p => (
                   <option key={p.name} value={p.name}>{p.name}</option>
                 ))}
               </select>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="number" inputMode="numeric" min="1" max="10"
+                  value={w.sets}
+                  onChange={e => updateWeekField(i, 'sets', e.target.value)}
+                  className="w-9 bg-brand-dark border border-brand-secondary rounded px-1 py-1.5 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                  title="Séries"
+                />
+                <span className="text-[10px] text-brand-muted">×</span>
+                <input
+                  type="number" inputMode="numeric" min="1" max="50"
+                  value={w.repsMin}
+                  onChange={e => updateWeekField(i, 'repsMin', e.target.value)}
+                  className="w-9 bg-brand-dark border border-brand-secondary rounded px-1 py-1.5 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                  title="Reps mín"
+                />
+                <span className="text-[10px] text-brand-muted">–</span>
+                <input
+                  type="number" inputMode="numeric" min="1" max="50"
+                  value={w.repsMax}
+                  onChange={e => updateWeekField(i, 'repsMax', e.target.value)}
+                  className="w-9 bg-brand-dark border border-brand-secondary rounded px-1 py-1.5 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"
+                  title="Reps máx"
+                />
+              </div>
               <input
                 type="text"
                 value={w.desc}
                 onChange={e => updateWeekDesc(i, e.target.value)}
                 placeholder="Descrição..."
-                className="flex-1 bg-brand-dark border border-brand-secondary rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-brand-green"
+                className="flex-1 min-w-0 bg-brand-dark border border-brand-secondary rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-brand-green"
               />
             </div>
           ))}
