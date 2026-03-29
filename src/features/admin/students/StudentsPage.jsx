@@ -211,7 +211,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [showAddModal, setShowAddModal] = useState(false)
-  const [, forceUpdate] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const students = useMemo(() => {
     let list = store.users.filter(u => u.role === 'student')
@@ -236,7 +236,7 @@ export default function StudentsPage() {
     list.sort((a, b) => getLastWorkoutInfo(a.id).days - getLastWorkoutInfo(b.id).days)
 
     return list
-  }, [search, filter])
+  }, [search, filter, refreshKey])
 
   const totalStudents = store.users.filter(u => u.role === 'student').length
 
@@ -310,7 +310,7 @@ export default function StudentsPage() {
         {showAddModal && (
           <AddStudentModal
             onClose={() => setShowAddModal(false)}
-            onCreated={() => forceUpdate(n => n + 1)}
+            onCreated={() => setRefreshKey(n => n + 1)}
           />
         )}
       </div>
