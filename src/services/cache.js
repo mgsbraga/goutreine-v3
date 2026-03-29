@@ -2,15 +2,44 @@ import { sb } from '../lib/supabase'
 import { store } from '../shared/constants/store'
 import { persistOfflineCache, restoreOfflineCache } from '../lib/offline-cache'
 
+// Hardcoded groups/exercises that may not exist in Supabase yet — merged in-memory after loading
+const EXTRA_MUSCLE_GROUPS = [
+  { id: 10, name: 'Cardio', icon: 'cardio' },
+  { id: 11, name: 'Core', icon: 'core' },
+]
+const EXTRA_EXERCISES = [
+  { id: 21, name: 'Bike', muscle_group_id: 10, description: 'Bicicleta ergométrica' },
+  { id: 22, name: 'Remo Ergômetro', muscle_group_id: 10, description: 'Remo ergômetro' },
+  { id: 23, name: 'Transport', muscle_group_id: 10, description: 'Transport / elíptico' },
+  { id: 24, name: 'S-Force', muscle_group_id: 10, description: 'S-Force / air bike' },
+  { id: 25, name: 'Esteira', muscle_group_id: 10, description: 'Caminhada ou corrida' },
+  { id: 26, name: 'Escada', muscle_group_id: 10, description: 'Simulador de escada' },
+  { id: 27, name: 'Abdominal Crunch', muscle_group_id: 11, description: 'Abdominal tradicional' },
+  { id: 28, name: 'Prancha', muscle_group_id: 11, description: 'Prancha isométrica' },
+  { id: 29, name: 'Abdominal Infra', muscle_group_id: 11, description: 'Elevação de pernas' },
+  { id: 30, name: 'Russian Twist', muscle_group_id: 11, description: 'Rotação com carga para oblíquos' },
+  { id: 31, name: 'Abdominal na Roda', muscle_group_id: 11, description: 'Roda abdominal / ab wheel' },
+]
+
+function mergeDefaults(supabaseList, defaults, keyField = 'name') {
+  const result = [...supabaseList]
+  for (const dflt of defaults) {
+    if (!result.some(item => item[keyField] === dflt[keyField])) {
+      result.push(dflt)
+    }
+  }
+  return result
+}
+
 export async function loadSupabaseCache(userId, role) {
   if (!sb) return
 
   try {
     const { data: mg } = await sb.from('muscle_groups').select('*').order('id')
-    store.muscle_groups = mg || []
-
     const { data: ex } = await sb.from('exercises').select('*').order('id')
-    store.exercises = ex || []
+
+    store.muscle_groups = mergeDefaults(mg || [], EXTRA_MUSCLE_GROUPS)
+    store.exercises = mergeDefaults(ex || [], EXTRA_EXERCISES)
 
     const { data: templates } = await sb.from('templates').select('*').order('created_at', { ascending: false })
     store.templates = templates || []
