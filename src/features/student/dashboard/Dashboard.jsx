@@ -198,6 +198,12 @@ export default function Dashboard() {
   const adherence = getAdherenceThisMonth(user.id, weeklyGoal)
   const streak = getStreak(user.id)
 
+  // Recent sessions
+  const recentSessions = store.workout_sessions
+    .filter(s => s.student_id === user.id)
+    .sort((a, b) => new Date(b.date || b.session_date) - new Date(a.date || a.session_date))
+    .slice(0, 5)
+
   // Top 3 PRs
   const top3 = getTop3PRs(user.id)
   const prColors = ['#A4E44B', '#cccccc', '#CD7F32']
@@ -334,6 +340,26 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Atividade Recente */}
+        <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
+          <div className="text-[13px] font-semibold mb-3">Atividade Recente</div>
+          {recentSessions.length === 0 ? (
+            <p className="text-brand-muted text-xs text-center py-3">Nenhuma sessão registrada ainda.</p>
+          ) : (
+            <div className="space-y-1">
+              {recentSessions.map(session => (
+                <div key={session.id} className="flex items-center justify-between py-2 px-1 border-b border-brand-dark last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{getPlanName(session.plan_id)}</p>
+                    <p className="text-[10px] text-brand-muted">{formatDate(session.date || session.session_date)}</p>
+                  </div>
+                  <span className="text-xs text-brand-green font-medium">{session.duration_minutes || 0} min</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </StudentLayout>
