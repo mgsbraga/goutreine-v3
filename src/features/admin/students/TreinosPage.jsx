@@ -2402,7 +2402,13 @@ export default function TreinosPage({ params }) {
     if (selectedStudent) {
       selectedStudent.weekly_goal = goal
       if (sb) {
-        await sb.from('profiles').update({ weekly_goal: goal }).eq('id', selectedId).catch(() => {})
+        const { error } = await sb.from('profiles').update({ weekly_goal: goal }).eq('id', selectedId)
+        if (error) {
+          console.error('[Meta] Erro ao salvar weekly_goal:', error.message)
+          alert('Erro ao salvar meta: ' + error.message)
+        } else {
+          console.log('[Meta] weekly_goal salvo:', goal, 'para', selectedId)
+        }
       }
     }
   }
