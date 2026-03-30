@@ -183,7 +183,7 @@ export default function Dashboard() {
   // Top 3 PRs
   const top3 = getTop3PRs(user.id)
   const prColors = ['#A4E44B', '#cccccc', '#CD7F32']
-  const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}']
+  const medals = ['🥇', '🥈', '🥉']
 
   // Progress bar percentage
   const progressPct = totalWeeks > 0 ? Math.round((currentWeek / totalWeeks) * 100) : 0
@@ -212,7 +212,7 @@ export default function Dashboard() {
                 {currentCfg.phase.toUpperCase()} — Semana {currentWeek} de {totalWeeks}
               </div>
               <div className="text-[10px] text-brand-muted truncate">
-                {scheme ? scheme.name : ''}{currentCfg.description ? ` \u00b7 ${currentCfg.description}` : ''}
+                {scheme ? scheme.name : ''}{currentCfg.description ? ` \· ${currentCfg.description}` : ''}
               </div>
               <div className="h-1 bg-brand-secondary rounded-full mt-1.5 overflow-hidden">
                 <div
@@ -245,8 +245,8 @@ export default function Dashboard() {
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold truncate">{nextPlan.name}</div>
                 <div className="text-[11px] text-brand-muted">
-                  {nextPlanExerciseCount !== '—' ? `${nextPlanExerciseCount} exerc\u00edcios` : ''}
-                  {lastSessionDate ? ` \u00b7 \u00daltimo: ${lastSessionDate}` : ''}
+                  {nextPlanExerciseCount !== '—' ? `${nextPlanExerciseCount} exerc\ícios` : ''}
+                  {lastSessionDate ? ` \· \Último: ${lastSessionDate}` : ''}
                 </div>
               </div>
             </div>
@@ -259,7 +259,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="p-4 bg-brand-card border border-brand-secondary rounded-xl">
-            <p className="text-brand-muted text-sm">Nenhum treino dispon\u00edvel</p>
+            <p className="text-brand-muted text-sm">Nenhum treino dispon\ível</p>
           </div>
         )}
 
@@ -268,7 +268,7 @@ export default function Dashboard() {
           {/* Treinos no mes */}
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-3 text-center">
             <div className="text-[22px] font-bold" style={{ color: '#A4E44B' }}>{workoutsThisMonth}</div>
-            <div className="text-[9px] text-brand-muted mt-0.5">Treinos no m\u00eas</div>
+            <div className="text-[9px] text-brand-muted mt-0.5">Treinos no m\ês</div>
             <div className={`text-[8px] font-semibold mt-1 ${workoutsChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
               {workoutsChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(workoutsChange)}
             </div>
@@ -288,9 +288,9 @@ export default function Dashboard() {
             <div className="text-[22px] font-bold" style={{ color: '#ffc83c' }}>
               {adherence !== null ? `${adherence}%` : '\u2014'}
             </div>
-            <div className="text-[9px] text-brand-muted mt-0.5">Ader\u00eancia</div>
+            <div className="text-[9px] text-brand-muted mt-0.5">Ader\ência</div>
             <div className="text-[8px] font-semibold mt-1" style={{ color: '#ffc83c' }}>
-              {weeklyGoal ? `Meta: ${weeklyGoal}\u00d7/sem` : ''}
+              {weeklyGoal ? `Meta: ${weeklyGoal}\×/sem` : ''}
             </div>
           </div>
         </div>
@@ -298,7 +298,7 @@ export default function Dashboard() {
         {/* Top 3 PRs */}
         {top3.length > 0 && (
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
-            <div className="text-[13px] font-semibold mb-3">{'\u{1F3C6}'} Top 3 Cargas</div>
+            <div className="text-[13px] font-semibold mb-3">{'🏆'} Top 3 Cargas</div>
             <div className="grid grid-cols-3 gap-2">
               {top3.map((pr, i) => (
                 <div key={pr.exerciseId} className="bg-brand-dark rounded-xl p-3 text-center">

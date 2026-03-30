@@ -1908,7 +1908,7 @@ function StudentProgressContent({ studentId }) {
       .slice(0, 6)
   })()
 
-  const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}', '4', '5', '6']
+  const medals = ['🥇', '🥈', '🥉', '4', '5', '6']
 
   function getExerciseGroupName(exerciseId) {
     const ex = store.exercises.find(e => e.id === exerciseId)
@@ -2095,7 +2095,7 @@ function StudentProgressContent({ studentId }) {
         labels: weeklyVolumeData.labels,
         datasets: [
           { label: 'Volume (kg)', data: weeklyVolumeData.volumes, backgroundColor: '#A4E44B50', borderColor: '#A4E44B', borderWidth: 1, borderRadius: 4, yAxisID: 'y' },
-          { label: 'Sess\u00f5es', data: weeklyVolumeData.sessionCounts, type: 'line', borderColor: '#64c8ff', backgroundColor: '#64c8ff20', pointBackgroundColor: '#64c8ff', pointRadius: large ? 6 : 5, tension: 0.3, yAxisID: 'y1' },
+          { label: 'Sess\ões', data: weeklyVolumeData.sessionCounts, type: 'line', borderColor: '#64c8ff', backgroundColor: '#64c8ff20', pointBackgroundColor: '#64c8ff', pointRadius: large ? 6 : 5, tension: 0.3, yAxisID: 'y1' },
         ],
       },
       options: {
@@ -2129,7 +2129,7 @@ function StudentProgressContent({ studentId }) {
 
   // Render CSS balance bars (for inline or modal)
   function BalanceBars({ large }) {
-    if (volumeData.labels.length === 0) return <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+    if (volumeData.labels.length === 0) return <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\íodo.</p>
     const trackH = large ? 'h-8' : 'h-6'
     const nameSize = large ? 'text-[15px]' : 'text-[13px]'
     const volSize = large ? 'text-[14px]' : 'text-xs'
@@ -2220,7 +2220,7 @@ function StudentProgressContent({ studentId }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
               <div className="text-[30px] font-bold" style={{ color: '#A4E44B' }}>{currentCount}</div>
-              <div className="text-xs text-brand-muted mt-1">Treinos no per\u00edodo</div>
+              <div className="text-xs text-brand-muted mt-1">Treinos no per\íodo</div>
               <div className={`text-[10px] font-semibold mt-1 ${countChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
                 {countChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(countChange)} vs anterior
               </div>
@@ -2243,16 +2243,16 @@ function StudentProgressContent({ studentId }) {
               <div className="text-[30px] font-bold" style={{ color: '#ff9664' }}>
                 {adherence !== null ? `${adherence}%` : '\u2014'}
               </div>
-              <div className="text-xs text-brand-muted mt-1">Ader\u00eancia</div>
+              <div className="text-xs text-brand-muted mt-1">Ader\ência</div>
               <div className="text-[10px] font-semibold mt-1" style={{ color: '#ff9664' }}>
-                {weeklyGoal ? `Meta: ${weeklyGoal}\u00d7/sem` : ''}
+                {weeklyGoal ? `Meta: ${weeklyGoal}\×/sem` : ''}
               </div>
             </div>
           </div>
 
           {/* Row 1: Progressao de Carga + Equilibrio Muscular */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <ExpandableCard chartKey="line" title="Progress\u00e3o de Carga">
+            <ExpandableCard chartKey="line" title="Progress\ão de Carga">
               <div className="flex justify-end mb-3">
                 <select
                   value={defaultExercise ?? ''}
@@ -2270,7 +2270,7 @@ function StudentProgressContent({ studentId }) {
                 </select>
               </div>
               {progressionData.length === 0 ? (
-                <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exerc\u00edcio no per\u00edodo.</p>
+                <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exerc\ício no per\íodo.</p>
               ) : (
                 <div style={{ height: '280px' }}>
                   <ChartCanvas id="admin-progression" buildChart={(ctx) => buildProgressionChart(ctx, false)} deps={[defaultExercise, days, progressionData.length]} />
@@ -2278,7 +2278,7 @@ function StudentProgressContent({ studentId }) {
               )}
             </ExpandableCard>
 
-            <ExpandableCard chartKey="balance" title="Equil\u00edbrio Muscular">
+            <ExpandableCard chartKey="balance" title="Equil\íbrio Muscular">
               <BalanceBars large={false} />
             </ExpandableCard>
           </div>
@@ -2287,7 +2287,7 @@ function StudentProgressContent({ studentId }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <ExpandableCard chartKey="stacked" title="Volume Semanal por Grupamento">
               {weeklyByGroup.labels.length === 0 ? (
-                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\íodo.</p>
               ) : (
                 <div style={{ height: '280px' }}>
                   <ChartCanvas id="admin-stacked-volume" buildChart={(ctx) => buildStackedVolumeChart(ctx, false)} deps={[days, weeklyByGroup.labels.join(',')]} />
@@ -2295,9 +2295,9 @@ function StudentProgressContent({ studentId }) {
               )}
             </ExpandableCard>
 
-            <ExpandableCard chartKey="freq" title="Frequ\u00eancia e Volume Semanal">
+            <ExpandableCard chartKey="freq" title="Frequ\ência e Volume Semanal">
               {weeklyVolumeData.labels.length === 0 ? (
-                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+                <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\íodo.</p>
               ) : (
                 <div style={{ height: '280px' }}>
                   <ChartCanvas id="admin-frequency" buildChart={(ctx) => buildFrequencyChart(ctx, false)} deps={[days, weeklyVolumeData.labels.join(',')]} />
@@ -2307,14 +2307,14 @@ function StudentProgressContent({ studentId }) {
           </div>
 
           {/* Row 3: PRs full width */}
-          <ExpandableCard chartKey="prs" title={'\u{1F3C6} Personal Records'}>
+          <ExpandableCard chartKey="prs" title={'🏆 Personal Records'}>
             <PRsList large={false} />
           </ExpandableCard>
 
           {/* Fullscreen modal for expanded charts */}
           <ExpandableChartModal
             isOpen={expandedChart === 'line'}
-            title="Progress\u00e3o de Carga"
+            title="Progress\ão de Carga"
             onClose={() => setExpandedChart(null)}
           >
             {progressionData.length === 0 ? (
@@ -2328,7 +2328,7 @@ function StudentProgressContent({ studentId }) {
 
           <ExpandableChartModal
             isOpen={expandedChart === 'balance'}
-            title="Equil\u00edbrio Muscular"
+            title="Equil\íbrio Muscular"
             onClose={() => setExpandedChart(null)}
           >
             <BalanceBars large={true} />
@@ -2350,7 +2350,7 @@ function StudentProgressContent({ studentId }) {
 
           <ExpandableChartModal
             isOpen={expandedChart === 'freq'}
-            title="Frequ\u00eancia e Volume Semanal"
+            title="Frequ\ência e Volume Semanal"
             onClose={() => setExpandedChart(null)}
           >
             {weeklyVolumeData.labels.length === 0 ? (
@@ -2364,7 +2364,7 @@ function StudentProgressContent({ studentId }) {
 
           <ExpandableChartModal
             isOpen={expandedChart === 'prs'}
-            title={'\u{1F3C6} Personal Records'}
+            title={'🏆 Personal Records'}
             onClose={() => setExpandedChart(null)}
           >
             <PRsList large={true} />

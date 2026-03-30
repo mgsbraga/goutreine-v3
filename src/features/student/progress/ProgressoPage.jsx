@@ -255,7 +255,7 @@ export default function ProgressoPage() {
 
   // PRs
   const prs = getPersonalRecords(user.id)
-  const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}', '4', '5', '6']
+  const medals = ['🥇', '🥈', '🥉', '4', '5', '6']
 
   // Exercise selector grouped by muscle group
   const exercisesByGroup = store.muscle_groups.map(group => ({
@@ -349,7 +349,7 @@ export default function ProgressoPage() {
             yAxisID: 'y',
           },
           {
-            label: 'Sess\u00f5es',
+            label: 'Sess\ões',
             data: weeklyVolumeData.sessionCounts,
             type: 'line',
             borderColor: '#64c8ff',
@@ -402,23 +402,23 @@ export default function ProgressoPage() {
             <div className="text-[22px] font-bold" style={{ color: '#A4E44B' }}>{currentCount}</div>
             <div className="text-[10px] text-brand-muted mt-0.5">Treinos</div>
             <div className={`text-[9px] font-semibold mt-1 ${countChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-              {countChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(countChange)} vs anterior
+              {countChange >= 0 ? '↑' : '↓'} {Math.abs(countChange)} vs anterior
             </div>
           </div>
           <div className="bg-brand-dark rounded-xl p-3">
             <div className="text-[22px] font-bold" style={{ color: '#64c8ff' }}>{formatVolume(currentVolume)}</div>
             <div className="text-[10px] text-brand-muted mt-0.5">Volume (kg)</div>
             <div className={`text-[9px] font-semibold mt-1 ${volumeChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-              {volumeChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(volumeChangePct)}%
+              {volumeChangePct >= 0 ? '↑' : '↓'} {Math.abs(volumeChangePct)}%
             </div>
           </div>
         </div>
 
         {/* Equilibrio Muscular — CSS bars */}
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
-          <div className="text-[13px] font-semibold mb-3">Equil\u00edbrio Muscular</div>
+          <div className="text-[13px] font-semibold mb-3">Equil\íbrio Muscular</div>
           {volumeData.labels.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-4">Nenhum dado no per\u00edodo.</p>
+            <p className="text-brand-muted text-sm text-center py-4">Nenhum dado no per\íodo.</p>
           ) : (
             <div className="space-y-1.5">
               {volumeData.labels.map((label, i) => {
@@ -444,7 +444,7 @@ export default function ProgressoPage() {
 
         {/* Personal Records */}
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
-          <div className="text-[13px] font-semibold mb-3">{'\u{1F3C6}'} Personal Records</div>
+          <div className="text-[13px] font-semibold mb-3">{'🏆'} Personal Records</div>
           {prs.length === 0 ? (
             <p className="text-brand-muted text-sm text-center py-4">Nenhum registro encontrado.</p>
           ) : (
@@ -469,12 +469,12 @@ export default function ProgressoPage() {
 
         {/* Progressao de Carga */}
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-[13px] font-semibold">Progress\u00e3o de Carga</div>
+          <div className="flex justify-between items-center gap-2 mb-2">
+            <div className="text-[13px] font-semibold shrink-0">Progressão de Carga</div>
             <select
               value={defaultExercise ?? ''}
               onChange={e => setSelectedExercise(parseInt(e.target.value))}
-              className="bg-brand-dark border border-brand-secondary rounded-lg px-2 py-1 text-[10px] text-white"
+              className="bg-brand-dark border border-brand-secondary rounded-lg px-2 py-1 text-[10px] text-white min-w-0 max-w-[160px] truncate"
             >
               {exercisesByGroup.map(({ group, exercises }) => (
                 <optgroup key={group.id} label={group.name}>
@@ -486,7 +486,7 @@ export default function ProgressoPage() {
             </select>
           </div>
           {progressionData.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exerc\u00edcio no per\u00edodo.</p>
+            <p className="text-brand-muted text-sm text-center py-6">Sem dados para este exercício no período.</p>
           ) : (
             <ChartCanvas
               id="progression-chart"
@@ -500,7 +500,7 @@ export default function ProgressoPage() {
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
           <div className="text-[13px] font-semibold mb-3">Volume por Semana</div>
           {weeklyByGroup.labels.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+            <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\íodo.</p>
           ) : (
             <ChartCanvas
               id="stacked-volume-chart"
@@ -512,9 +512,9 @@ export default function ProgressoPage() {
 
         {/* Frequencia e Volume */}
         <div className="bg-brand-card border border-brand-secondary rounded-xl p-3.5">
-          <div className="text-[13px] font-semibold mb-3">Frequ\u00eancia e Volume</div>
+          <div className="text-[13px] font-semibold mb-3">Frequ\ência e Volume</div>
           {weeklyVolumeData.labels.length === 0 ? (
-            <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\u00edodo.</p>
+            <p className="text-brand-muted text-sm text-center py-6">Nenhum dado no per\íodo.</p>
           ) : (
             <ChartCanvas
               id="frequency-chart"
