@@ -2120,7 +2120,7 @@ function StudentProgressContent({ studentId }) {
         className="bg-brand-card border border-brand-secondary rounded-xl p-5 cursor-pointer hover:border-[#A4E44B40] transition-colors relative"
         onClick={() => setExpandedChart(chartKey)}
       >
-        <span className="absolute top-3 right-3.5 text-sm text-brand-secondary hover:text-brand-green">{'\u26f6'}</span>
+        <span className="absolute top-3 right-3.5 text-sm text-brand-secondary hover:text-brand-green">{'⛶'}</span>
         <h3 className="text-[15px] font-semibold text-white mb-4">{title}</h3>
         {children}
       </div>
@@ -2222,26 +2222,26 @@ function StudentProgressContent({ studentId }) {
               <div className="text-[30px] font-bold" style={{ color: '#A4E44B' }}>{currentCount}</div>
               <div className="text-xs text-brand-muted mt-1">Treinos no per\íodo</div>
               <div className={`text-[10px] font-semibold mt-1 ${countChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-                {countChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(countChange)} vs anterior
+                {countChange >= 0 ? '↑' : '↓'} {Math.abs(countChange)} vs anterior
               </div>
             </div>
             <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
               <div className="text-[30px] font-bold" style={{ color: '#64c8ff' }}>{formatVol(currentVolume)}</div>
               <div className="text-xs text-brand-muted mt-1">Volume total (kg)</div>
               <div className={`text-[10px] font-semibold mt-1 ${volumeChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-                {volumeChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(volumeChangePct)}%
+                {volumeChangePct >= 0 ? '↑' : '↓'} {Math.abs(volumeChangePct)}%
               </div>
             </div>
             <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
               <div className="text-[30px] font-bold" style={{ color: '#ffc83c' }}>{formatVol(volumePerWorkout)}</div>
               <div className="text-xs text-brand-muted mt-1">Volume por treino</div>
               <div className={`text-[10px] font-semibold mt-1 ${vptChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-                {vptChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(vptChangePct)}%
+                {vptChangePct >= 0 ? '↑' : '↓'} {Math.abs(vptChangePct)}%
               </div>
             </div>
             <div className="bg-brand-card border border-brand-secondary rounded-xl p-5">
               <div className="text-[30px] font-bold" style={{ color: '#ff9664' }}>
-                {adherence !== null ? `${adherence}%` : '\u2014'}
+                {adherence !== null ? `${adherence}%` : '—'}
               </div>
               <div className="text-xs text-brand-muted mt-1">Ader\ência</div>
               <div className="text-[10px] font-semibold mt-1" style={{ color: '#ff9664' }}>

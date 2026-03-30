@@ -86,6 +86,23 @@ function getAdherenceThisMonth(studentId, weeklyGoal) {
   return Math.min(100, Math.round((sessionsThisMonth / (weeklyGoal * weeksInMonth)) * 100))
 }
 
+function getStreak(studentId) {
+  const sessions = store.workout_sessions
+    .filter(s => s.student_id === studentId)
+    .sort((a, b) => new Date(b.date || b.session_date) - new Date(a.date || a.session_date))
+  if (sessions.length === 0) return 0
+  let streak = 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  for (const s of sessions) {
+    const d = new Date((s.date || s.session_date) + 'T00:00:00')
+    const diffDays = Math.floor((today - d) / (1000 * 60 * 60 * 24))
+    if (diffDays <= streak + 1) streak = diffDays + 1
+    else break
+  }
+  return Math.min(streak, sessions.length)
+}
+
 function getTop3PRs(studentId) {
   const studentSessionIds = store.workout_sessions
     .filter(s => s.student_id === studentId)
@@ -179,6 +196,7 @@ export default function Dashboard() {
 
   const weeklyGoal = user.weekly_goal
   const adherence = getAdherenceThisMonth(user.id, weeklyGoal)
+  const streak = getStreak(user.id)
 
   // Top 3 PRs
   const top3 = getTop3PRs(user.id)
@@ -212,7 +230,7 @@ export default function Dashboard() {
                 {currentCfg.phase.toUpperCase()} — Semana {currentWeek} de {totalWeeks}
               </div>
               <div className="text-[10px] text-brand-muted truncate">
-                {scheme ? scheme.name : ''}{currentCfg.description ? ` \· ${currentCfg.description}` : ''}
+                {scheme ? scheme.name : ''}{currentCfg.description ? ` · ${currentCfg.description}` : ''}
               </div>
               <div className="h-1 bg-brand-secondary rounded-full mt-1.5 overflow-hidden">
                 <div
@@ -245,8 +263,8 @@ export default function Dashboard() {
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold truncate">{nextPlan.name}</div>
                 <div className="text-[11px] text-brand-muted">
-                  {nextPlanExerciseCount !== '—' ? `${nextPlanExerciseCount} exerc\ícios` : ''}
-                  {lastSessionDate ? ` \· \Último: ${lastSessionDate}` : ''}
+                  {nextPlanExerciseCount !== '—' ? `${nextPlanExerciseCount} exercícios` : ''}
+                  {lastSessionDate ? ` · Último: ${lastSessionDate}` : ''}
                 </div>
               </div>
             </div>
@@ -259,39 +277,41 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="p-4 bg-brand-card border border-brand-secondary rounded-xl">
-            <p className="text-brand-muted text-sm">Nenhum treino dispon\ível</p>
+            <p className="text-brand-muted text-sm">Nenhum treino disponível</p>
           </div>
         )}
 
-        {/* KPIs — 3 columns */}
-        <div className="grid grid-cols-3 gap-2">
-          {/* Treinos no mes */}
+        {/* KPIs — 2x2 grid */}
+        <div className="grid grid-cols-2 gap-2">
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-3 text-center">
             <div className="text-[22px] font-bold" style={{ color: '#A4E44B' }}>{workoutsThisMonth}</div>
-            <div className="text-[9px] text-brand-muted mt-0.5">Treinos no m\ês</div>
+            <div className="text-[9px] text-brand-muted mt-0.5">Treinos no mês</div>
             <div className={`text-[8px] font-semibold mt-1 ${workoutsChange >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-              {workoutsChange >= 0 ? '\u2191' : '\u2193'} {Math.abs(workoutsChange)}
+              {workoutsChange >= 0 ? '↑' : '↓'} {Math.abs(workoutsChange)} vs anterior
             </div>
           </div>
 
-          {/* Volume total kg */}
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-3 text-center">
             <div className="text-[22px] font-bold" style={{ color: '#64c8ff' }}>{formatVolume(volumeThisMonth)}</div>
             <div className="text-[9px] text-brand-muted mt-0.5">Volume (kg)</div>
             <div className={`text-[8px] font-semibold mt-1 ${volumeChangePct >= 0 ? 'text-brand-green' : 'text-red-400'}`}>
-              {volumeChangePct >= 0 ? '\u2191' : '\u2193'} {Math.abs(volumeChangePct)}%
+              {volumeChangePct >= 0 ? '↑' : '↓'} {Math.abs(volumeChangePct)}%
             </div>
           </div>
 
-          {/* Aderencia */}
           <div className="bg-brand-card border border-brand-secondary rounded-xl p-3 text-center">
             <div className="text-[22px] font-bold" style={{ color: '#ffc83c' }}>
-              {adherence !== null ? `${adherence}%` : '\u2014'}
+              {adherence !== null ? `${adherence}%` : '—'}
             </div>
-            <div className="text-[9px] text-brand-muted mt-0.5">Ader\ência</div>
+            <div className="text-[9px] text-brand-muted mt-0.5">Aderência</div>
             <div className="text-[8px] font-semibold mt-1" style={{ color: '#ffc83c' }}>
-              {weeklyGoal ? `Meta: ${weeklyGoal}\×/sem` : ''}
+              {weeklyGoal ? `Meta: ${weeklyGoal}×/sem` : ''}
             </div>
+          </div>
+
+          <div className="bg-brand-card border border-brand-secondary rounded-xl p-3 text-center">
+            <div className="text-[22px] font-bold" style={{ color: '#9664ff' }}>{streak}</div>
+            <div className="text-[9px] text-brand-muted mt-0.5">Dias sem faltar</div>
           </div>
         </div>
 
