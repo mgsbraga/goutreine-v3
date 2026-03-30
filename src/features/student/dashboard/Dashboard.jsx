@@ -197,7 +197,6 @@ export default function Dashboard() {
   const weeklyGoal = user.weekly_goal
   const adherence = getAdherenceThisMonth(user.id, weeklyGoal)
   const streak = getStreak(user.id)
-  console.log('[Dashboard] user.weekly_goal:', user.weekly_goal, 'adherence:', adherence, 'user:', JSON.stringify({ id: user.id, weekly_goal: user.weekly_goal, role: user.role }))
 
   // Recent sessions
   const recentSessions = store.workout_sessions

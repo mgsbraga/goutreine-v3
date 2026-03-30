@@ -2406,8 +2406,6 @@ export default function TreinosPage({ params }) {
         if (error) {
           console.error('[Meta] Erro ao salvar weekly_goal:', error.message)
           alert('Erro ao salvar meta: ' + error.message)
-        } else {
-          console.log('[Meta] weekly_goal salvo:', goal, 'para', selectedId)
         }
       }
     }
