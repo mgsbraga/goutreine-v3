@@ -59,7 +59,7 @@ export function AuthProvider({ children }) {
       ])
       if (!profile) throw new Error('Perfil não encontrado')
 
-      const user = { id: sessionUser.id, email: sessionUser.email, name: profile.name, role: profile.role }
+      const user = { id: sessionUser.id, email: sessionUser.email, name: profile.name, role: profile.role, weekly_goal: profile.weekly_goal || 0 }
       userRef.current = user
       setCurrentUser(user)
       saveOfflineAuth(user.id, user.role, user.email)
@@ -121,7 +121,7 @@ export function AuthProvider({ children }) {
     if (!data?.user) throw new Error('Login falhou')
 
     const profile = await authService.getProfile(data.user.id)
-    const user = { id: data.user.id, email: data.user.email, name: profile.name, role: profile.role }
+    const user = { id: data.user.id, email: data.user.email, name: profile.name, role: profile.role, weekly_goal: profile.weekly_goal || 0 }
     userRef.current = user
     saveOfflineAuth(user.id, user.role, user.email)
 
