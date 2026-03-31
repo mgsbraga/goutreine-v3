@@ -297,7 +297,7 @@ function AddExerciseModal({ planId, phaseId, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm text-brand-muted mb-1">Carga sugerida (kg)</label>
-              <input type="number" inputMode="decimal" value={suggestedWeight} onChange={e => setSuggestedWeight(e.target.value)} min={0} step={0.5} placeholder="Opcional" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
+              <input type="number" inputMode="decimal" value={suggestedWeight} onChange={e => setSuggestedWeight(e.target.value)} min={0} step={0.25} placeholder="Opcional" className="w-full bg-brand-dark border border-brand-secondary rounded-lg px-3 py-2 text-sm text-white placeholder:text-brand-muted focus:outline-none focus:border-brand-green" />
             </div>
             <div>
               <label className="block text-sm text-brand-muted mb-1">Descanso (seg)</label>
@@ -560,7 +560,7 @@ function PlanEditor({ plan, onRefresh }) {
                     </div>
                     <div className="flex items-center gap-1">
                       <label className="text-[10px] text-brand-muted">Kg</label>
-                      <input type="number" value={editValues.weight} onChange={e => setEditValues(v => ({...v, weight: e.target.value}))} min={0} step={0.5} className="w-14 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
+                      <input type="number" value={editValues.weight} onChange={e => setEditValues(v => ({...v, weight: e.target.value}))} min={0} step={0.25} className="w-14 bg-brand-dark border border-brand-secondary rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-brand-green" />
                     </div>
                     <button onClick={() => setEditingId(null)} className="text-[10px] text-brand-muted hover:text-white transition-colors">✕</button>
                   </div>
@@ -1011,7 +1011,7 @@ function PhaseWeekEditor({ phase, onClose, onSave }) {
                               />
                               <span className="text-[10px] text-brand-muted ml-1">kg</span>
                               <input
-                                type="number" inputMode="decimal" min="0" step="0.5"
+                                type="number" inputMode="decimal" min="0" step="0.25"
                                 value={cfg.weight}
                                 onChange={e => updateExConfig(pe.id, weekNum, 'weight', e.target.value)}
                                 className="w-12 bg-brand-dark border border-brand-secondary rounded px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-brand-green"

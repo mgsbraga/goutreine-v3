@@ -659,7 +659,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                       type="number"
                       inputMode="decimal"
                       pattern="[0-9]*\.?[0-9]*"
-                      step="0.5"
+                      step="0.25"
                       min="0"
                       placeholder={
                         prevLog ? String(prevLog.weight)
@@ -718,7 +718,7 @@ export default function ExecutarTreino({ planId: rawPlanId }) {
                               type="number"
                               inputMode="decimal"
                               pattern="[0-9]*\.?[0-9]*"
-                              step="0.5"
+                              step="0.25"
                               min="0"
                               placeholder="Peso"
                               value={drop.weight}
