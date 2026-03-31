@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { sb } from '../../../lib/supabase'
+import { navigate } from '../../../app/router'
 import { store } from '../../../shared/constants/store'
 import * as programsService from '../../../services/programs'
 import { PERIODIZATION_SCHEMES } from '../../../shared/constants/periodization-schemes'
@@ -1645,6 +1646,16 @@ function StudentTreinosContent({ studentId }) {
             />
           ))}
         </div>
+      )}
+
+      {/* Confirmar */}
+      {sorted.length > 0 && (
+        <button
+          onClick={() => navigate('admin/alunos')}
+          className="w-full bg-brand-green text-brand-dark py-3 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity mt-2"
+        >
+          Confirmar
+        </button>
       )}
 
       {modalOpen && (
