@@ -30,7 +30,7 @@ function summarizePhases(configs) {
 }
 
 function MiniTimeline({ configs }) {
-  if (!configs || configs.length === 0) return null
+  if (!configs || !Array.isArray(configs) || configs.length === 0) return null
   return (
     <div className="flex gap-0.5 h-5 mt-2">
       {configs.map((c, i) => {

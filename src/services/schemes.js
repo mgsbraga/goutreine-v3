@@ -25,15 +25,20 @@ export async function getCustomSchemes() {
     console.error('[getCustomSchemes]', error)
     return store.custom_schemes || []
   }
-  store.custom_schemes = data || []
-  return data || []
+  // Parse configs — may be a JSON string if stored via JSON.stringify into JSONB
+  const parsed = (data || []).map(s => ({
+    ...s,
+    configs: typeof s.configs === 'string' ? JSON.parse(s.configs) : (s.configs || []),
+  }))
+  store.custom_schemes = parsed
+  return parsed
 }
 
 export async function createScheme({ name, totalWeeks, configs }) {
   const scheme = {
     name,
     total_weeks: totalWeeks,
-    configs: JSON.stringify(configs),
+    configs,
     type: 'custom',
   }
 
@@ -57,7 +62,7 @@ export async function updateScheme(schemeId, { name, totalWeeks, configs }) {
   const updates = {}
   if (name !== undefined) updates.name = name
   if (totalWeeks !== undefined) updates.total_weeks = totalWeeks
-  if (configs !== undefined) updates.configs = JSON.stringify(configs)
+  if (configs !== undefined) updates.configs = configs
 
   if (!sb) {
     const scheme = (store.custom_schemes || []).find(s => s.id === schemeId)
