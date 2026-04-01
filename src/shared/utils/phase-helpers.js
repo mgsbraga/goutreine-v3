@@ -7,6 +7,17 @@ export function getActivePhase(studentId) {
   ) || null
 }
 
+export function getWeekFromStartDate(phase) {
+  if (!phase?.start_date) return 1
+  const totalWeeks = phase.total_weeks || 8
+  const start = new Date(phase.start_date + 'T00:00:00')
+  const now = new Date()
+  const diffMs = now - start
+  if (diffMs < 0) return 1
+  const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000))
+  return Math.max(1, Math.min(totalWeeks, diffWeeks + 1))
+}
+
 export function getCurrentWeekForPhase(phase) {
   if (!phase) return 1
   const totalWeeks = phase.total_weeks || 8
@@ -18,7 +29,7 @@ export function getCurrentWeekForPhase(phase) {
 
   // Get all plans for this phase
   const plans = store.training_plans.filter(p => p.phase_id === phase.id)
-  if (plans.length === 0) return 1
+  if (plans.length === 0) return getWeekFromStartDate(phase)
 
   // Get all sessions for these plans, sorted chronologically
   const planIds = new Set(plans.map(p => p.id))
@@ -26,7 +37,8 @@ export function getCurrentWeekForPhase(phase) {
     .filter(s => planIds.has(s.plan_id))
     .sort((a, b) => new Date(a.date || a.session_date) - new Date(b.date || b.session_date))
 
-  if (sessions.length === 0) return 1
+  // No sessions yet — fall back to date-based calculation
+  if (sessions.length === 0) return getWeekFromStartDate(phase)
 
   // Count completed rounds: each round requires one session per plan
   let completedRounds = 0
