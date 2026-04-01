@@ -11,6 +11,11 @@ export function getCurrentWeekForPhase(phase) {
   if (!phase) return 1
   const totalWeeks = phase.total_weeks || 8
 
+  // Manual override — admin set a specific week
+  if (phase.week_override != null) {
+    return Math.max(1, Math.min(totalWeeks, phase.week_override))
+  }
+
   // Get all plans for this phase
   const plans = store.training_plans.filter(p => p.phase_id === phase.id)
   if (plans.length === 0) return 1

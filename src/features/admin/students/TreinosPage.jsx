@@ -1219,8 +1219,33 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
   const [showApplyBase, setShowApplyBase] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(phase.name)
+  const [weekSaving, setWeekSaving] = useState(false)
 
   const plans = store.training_plans.filter((p) => p.phase_id === phase.id)
+  const currentWeek = getCurrentWeekForPhase(phase)
+  const totalWeeks = phase.total_weeks || 8
+
+  async function handleSetWeek(newWeek) {
+    const clamped = Math.max(1, Math.min(totalWeeks, newWeek))
+    if (clamped === currentWeek) return
+    setWeekSaving(true)
+    try {
+      await programsService.updatePhase(phase.id, { week_override: clamped })
+      onRefresh()
+    } finally {
+      setWeekSaving(false)
+    }
+  }
+
+  async function handleClearWeekOverride() {
+    setWeekSaving(true)
+    try {
+      await programsService.updatePhase(phase.id, { week_override: null })
+      onRefresh()
+    } finally {
+      setWeekSaving(false)
+    }
+  }
 
   async function handleSaveName() {
     const trimmed = nameValue.trim()
@@ -1340,11 +1365,41 @@ function PhaseCard({ phase, onStatusChange, onRefresh }) {
               )}
               <StatusBadge status={phase.status} />
             </div>
-            <div className="flex flex-wrap gap-4 mt-1.5 text-xs text-brand-muted">
+            <div className="flex flex-wrap items-center gap-4 mt-1.5 text-xs text-brand-muted">
               <span>Início: {formatDate(phase.start_date)}</span>
               {phase.end_date && <span>Fim: {formatDate(phase.end_date)}</span>}
-              <span>{phase.total_weeks} semana{phase.total_weeks !== 1 ? 's' : ''}</span>
+              <span>{totalWeeks} semana{totalWeeks !== 1 ? 's' : ''}</span>
               <span>{plans.length} treino{plans.length !== 1 ? 's' : ''}</span>
+              {/* Week selector */}
+              <span className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleSetWeek(currentWeek - 1)}
+                  disabled={weekSaving || currentWeek <= 1}
+                  className="w-5 h-5 rounded flex items-center justify-center bg-brand-secondary text-brand-muted hover:text-white hover:bg-brand-green/20 transition-colors disabled:opacity-30 disabled:hover:bg-brand-secondary disabled:hover:text-brand-muted"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <span className="text-brand-green font-semibold min-w-[60px] text-center">
+                  Sem {currentWeek}/{totalWeeks}
+                </span>
+                <button
+                  onClick={() => handleSetWeek(currentWeek + 1)}
+                  disabled={weekSaving || currentWeek >= totalWeeks}
+                  className="w-5 h-5 rounded flex items-center justify-center bg-brand-secondary text-brand-muted hover:text-white hover:bg-brand-green/20 transition-colors disabled:opacity-30 disabled:hover:bg-brand-secondary disabled:hover:text-brand-muted"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+                {phase.week_override != null && (
+                  <button
+                    onClick={handleClearWeekOverride}
+                    disabled={weekSaving}
+                    className="text-[10px] text-brand-muted hover:text-amber-400 transition-colors ml-0.5"
+                    title="Remover override manual (voltar ao cálculo automático)"
+                  >
+                    auto
+                  </button>
+                )}
+              </span>
             </div>
           </div>
 
